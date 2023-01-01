@@ -1,4 +1,6 @@
 extends Node3D
+class_name Turret
+
 var global_target : Vector3
 
 var body_controler: PIDControler = PIDControler.new(1500, 0, 250)

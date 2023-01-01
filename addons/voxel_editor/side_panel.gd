@@ -1,6 +1,6 @@
 @tool
 extends ScrollContainer
-
+class_name SidePannel
 const ColorButton = preload("color_button.tscn")
 
 var color: Color = Color.WHITE_SMOKE

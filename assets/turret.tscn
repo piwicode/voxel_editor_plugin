@@ -1,6 +1,10 @@
-[gd_scene load_steps=2 format=3 uid="uid://ce6tu0x1ceisv"]
+[gd_scene load_steps=3 format=3 uid="uid://ce6tu0x1ceisv"]
 
 [ext_resource type="Script" path="res://addons/voxel_editor/voxel_node.gd" id="1_0r3ar"]
+
+[sub_resource type="Environment" id="Environment_40vcn"]
+ambient_light_color = Color(0.662745, 0.662745, 0.662745, 1)
+ambient_light_energy = 1.2
 
 [node name="turret" type="Node3D"]
 
@@ -79,14 +83,6 @@ Vector3i(-3, 1, -1): {
 "color": Color(0.364706, 0.427451, 0.494118, 1),
 "mesh_id": 255
 },
-Vector3i(-3, 1, 0): {
-"color": Color(0.364706, 0.427451, 0.494118, 1),
-"mesh_id": 255
-},
-Vector3i(-3, 1, 1): {
-"color": Color(0.364706, 0.427451, 0.494118, 1),
-"mesh_id": 255
-},
 Vector3i(-3, 1, 2): {
 "color": Color(0.364706, 0.427451, 0.494118, 1),
 "mesh_id": 255
@@ -97,17 +93,9 @@ Vector3i(-3, 1, 3): {
 },
 Vector3i(-3, 2, -2): {
 "color": Color(0.364706, 0.427451, 0.494118, 1),
-"mesh_id": 250
+"mesh_id": 232
 },
 Vector3i(-3, 2, -1): {
-"color": Color(0.364706, 0.427451, 0.494118, 1),
-"mesh_id": 255
-},
-Vector3i(-3, 2, 0): {
-"color": Color(0.364706, 0.427451, 0.494118, 1),
-"mesh_id": 255
-},
-Vector3i(-3, 2, 1): {
 "color": Color(0.364706, 0.427451, 0.494118, 1),
 "mesh_id": 255
 },
@@ -117,21 +105,13 @@ Vector3i(-3, 2, 2): {
 },
 Vector3i(-3, 2, 3): {
 "color": Color(0.364706, 0.427451, 0.494118, 1),
-"mesh_id": 175
+"mesh_id": 142
 },
 Vector3i(-3, 3, -2): {
 "color": Color(0.364706, 0.427451, 0.494118, 1),
 "mesh_id": 250
 },
 Vector3i(-3, 3, -1): {
-"color": Color(0.364706, 0.427451, 0.494118, 1),
-"mesh_id": 255
-},
-Vector3i(-3, 3, 0): {
-"color": Color(0.364706, 0.427451, 0.494118, 1),
-"mesh_id": 255
-},
-Vector3i(-3, 3, 1): {
 "color": Color(0.364706, 0.427451, 0.494118, 1),
 "mesh_id": 255
 },
@@ -145,7 +125,7 @@ Vector3i(-3, 3, 3): {
 },
 Vector3i(-3, 4, -2): {
 "color": Color(0.364706, 0.427451, 0.494118, 1),
-"mesh_id": 250
+"mesh_id": 232
 },
 Vector3i(-3, 4, -1): {
 "color": Color(0.364706, 0.427451, 0.494118, 1),
@@ -153,11 +133,11 @@ Vector3i(-3, 4, -1): {
 },
 Vector3i(-3, 4, 0): {
 "color": Color(0.364706, 0.427451, 0.494118, 1),
-"mesh_id": 255
+"mesh_id": 238
 },
 Vector3i(-3, 4, 1): {
 "color": Color(0.364706, 0.427451, 0.494118, 1),
-"mesh_id": 255
+"mesh_id": 238
 },
 Vector3i(-3, 4, 2): {
 "color": Color(0.364706, 0.427451, 0.494118, 1),
@@ -165,7 +145,7 @@ Vector3i(-3, 4, 2): {
 },
 Vector3i(-3, 4, 3): {
 "color": Color(0.364706, 0.427451, 0.494118, 1),
-"mesh_id": 175
+"mesh_id": 142
 },
 Vector3i(-3, 5, -2): {
 "color": Color(0.364706, 0.427451, 0.494118, 1),
@@ -273,7 +253,7 @@ Vector3i(-2, 1, 3): {
 },
 Vector3i(-2, 2, -2): {
 "color": Color(0.364706, 0.427451, 0.494118, 1),
-"mesh_id": 255
+"mesh_id": 252
 },
 Vector3i(-2, 2, -1): {
 "color": Color(0.364706, 0.427451, 0.494118, 1),
@@ -293,7 +273,7 @@ Vector3i(-2, 2, 2): {
 },
 Vector3i(-2, 2, 3): {
 "color": Color(0.364706, 0.427451, 0.494118, 1),
-"mesh_id": 255
+"mesh_id": 207
 },
 Vector3i(-2, 3, -2): {
 "color": Color(0.364706, 0.427451, 0.494118, 1),
@@ -321,7 +301,7 @@ Vector3i(-2, 3, 3): {
 },
 Vector3i(-2, 4, -2): {
 "color": Color(0.364706, 0.427451, 0.494118, 1),
-"mesh_id": 255
+"mesh_id": 252
 },
 Vector3i(-2, 4, -1): {
 "color": Color(0.364706, 0.427451, 0.494118, 1),
@@ -333,7 +313,7 @@ Vector3i(-2, 4, 2): {
 },
 Vector3i(-2, 4, 3): {
 "color": Color(0.364706, 0.427451, 0.494118, 1),
-"mesh_id": 255
+"mesh_id": 207
 },
 Vector3i(-2, 5, -2): {
 "color": Color(0.364706, 0.427451, 0.494118, 1),
@@ -433,7 +413,7 @@ Vector3i(-1, 1, 3): {
 },
 Vector3i(-1, 2, -2): {
 "color": Color(0.364706, 0.427451, 0.494118, 1),
-"mesh_id": 255
+"mesh_id": 252
 },
 Vector3i(-1, 2, -1): {
 "color": Color(0.364706, 0.427451, 0.494118, 1),
@@ -453,7 +433,7 @@ Vector3i(-1, 2, 2): {
 },
 Vector3i(-1, 2, 3): {
 "color": Color(0.364706, 0.427451, 0.494118, 1),
-"mesh_id": 255
+"mesh_id": 207
 },
 Vector3i(-1, 3, -2): {
 "color": Color(0.364706, 0.427451, 0.494118, 1),
@@ -473,7 +453,7 @@ Vector3i(-1, 3, 3): {
 },
 Vector3i(-1, 4, -2): {
 "color": Color(0.364706, 0.427451, 0.494118, 1),
-"mesh_id": 255
+"mesh_id": 252
 },
 Vector3i(-1, 4, -1): {
 "color": Color(0.364706, 0.427451, 0.494118, 1),
@@ -485,7 +465,7 @@ Vector3i(-1, 4, 2): {
 },
 Vector3i(-1, 4, 3): {
 "color": Color(0.364706, 0.427451, 0.494118, 1),
-"mesh_id": 255
+"mesh_id": 207
 },
 Vector3i(-1, 5, -2): {
 "color": Color(0.364706, 0.427451, 0.494118, 1),
@@ -577,7 +557,7 @@ Vector3i(0, 1, 3): {
 },
 Vector3i(0, 2, -2): {
 "color": Color(0.364706, 0.427451, 0.494118, 1),
-"mesh_id": 255
+"mesh_id": 252
 },
 Vector3i(0, 2, -1): {
 "color": Color(0.364706, 0.427451, 0.494118, 1),
@@ -597,7 +577,7 @@ Vector3i(0, 2, 2): {
 },
 Vector3i(0, 2, 3): {
 "color": Color(0.364706, 0.427451, 0.494118, 1),
-"mesh_id": 255
+"mesh_id": 207
 },
 Vector3i(0, 3, -2): {
 "color": Color(0.364706, 0.427451, 0.494118, 1),
@@ -617,7 +597,7 @@ Vector3i(0, 3, 3): {
 },
 Vector3i(0, 4, -2): {
 "color": Color(0.364706, 0.427451, 0.494118, 1),
-"mesh_id": 255
+"mesh_id": 252
 },
 Vector3i(0, 4, -1): {
 "color": Color(0.364706, 0.427451, 0.494118, 1),
@@ -629,7 +609,7 @@ Vector3i(0, 4, 2): {
 },
 Vector3i(0, 4, 3): {
 "color": Color(0.364706, 0.427451, 0.494118, 1),
-"mesh_id": 255
+"mesh_id": 207
 },
 Vector3i(0, 5, -2): {
 "color": Color(0.364706, 0.427451, 0.494118, 1),
@@ -1169,3 +1149,6 @@ Vector3i(10, 5, 1): {
 }
 export_path = "res://assets/turret_cannon.res"
 metadata/_edit_group_ = true
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="."]
+environment = SubResource("Environment_40vcn")
