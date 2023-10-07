@@ -3,16 +3,14 @@ extends Node3D
 
 @export var map :Dictionary = {}
 
-func __to_name(coord: Vector3i):
+static func coord_to_name(coord: Vector3i):
 	return "%s" % coord
 
 func set_cell(coord: Vector3i, value: int):
 	print("set cell ", coord, " ", value)
 	if value == 0:
 		map.erase(coord)
-		for c in get_children():
-			print(c.name)
-		var child = get_node(NodePath(__to_name(coord)))
+		var child = get_node(NodePath(coord_to_name(coord)))
 		if child:
 			print("remove child ", child)
 			remove_child(child)
@@ -21,11 +19,11 @@ func set_cell(coord: Vector3i, value: int):
 		if value in map:
 			return
 		map[coord] = value
-		instantiate(coord)
+		_instantiate(coord)
 	
-func instantiate(coord: Vector3i):
+func _instantiate(coord: Vector3i):
 	var child = preload("library.tscn").instantiate()
-	child.name = __to_name(coord)
+	child.name = coord_to_name(coord)
 	child.position = Vector3(coord)
 	add_child(child)
 	print("instantiate ", {child=child, coord=coord})
@@ -37,7 +35,7 @@ func _ready():
 	if map.size() == 0:
 		map[Vector3i(0,0,0)] = 1
 	for key in map.keys():
-		instantiate(key)
+		_instantiate(key)
 
 func _enter_tree():
 	print("Add box to Voxel")
