@@ -25,6 +25,7 @@ func _instantiate(coord: Vector3i):
 	var child = preload("library.tscn").instantiate()
 	child.name = coord_to_name(coord)
 	child.position = Vector3(coord)
+#	child.set_meta("_edit_lock_", true)
 	add_child(child)
 	print("instantiate ", {child=child, coord=coord})
 	# No need to set owner as we don't want this child to be persisted
@@ -39,6 +40,8 @@ func _ready():
 
 func _enter_tree():
 	print("Add box to Voxel")
+	# Clicking a children will edit this node.
+	set_meta("_edit_group_", true)
 
 
 # Called every frame. 'delta' is the elapsed time since the previous frame.
