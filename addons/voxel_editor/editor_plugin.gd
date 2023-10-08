@@ -27,13 +27,14 @@ func _is_voxel_node(object):
 
 func _handles(object):
 	should_handle = object is VoxelNode
-	print("set should_handle to ", should_handle)
+	print("voxel editor plugin set should_handle to ", should_handle)
 	return should_handle
+
 
 func _forward_3d_gui_input(camera: Camera3D, event: InputEvent)-> int:
 	if not should_handle:
 		return AFTER_GUI_INPUT_PASS
-		
+
 	if event is InputEventMouse:
 		var ray_origin = camera.project_ray_origin(event.position)
 		var ray_end = ray_origin + camera.project_ray_normal(event.position) * camera.far
@@ -45,10 +46,10 @@ func _forward_3d_gui_input(camera: Camera3D, event: InputEvent)-> int:
 		if not result:
 			return EditorPlugin.AFTER_GUI_INPUT_PASS
 	
-		var picked_cell = result.collider.get_parent_node_3d().get_parent_node_3d()
+		var picked_cell = result.collider.get_parent_node_3d()
 		var picked_voxel = picked_cell.get_parent_node_3d()
 
-#		print("parent ", picked_voxel)
+#		print("parent ", picked_cell.name, " ", picked_voxel.name, " ", picked_voxel is VoxelNode)
 		if not picked_voxel is VoxelNode:
 			return EditorPlugin.AFTER_GUI_INPUT_PASS
 		
@@ -63,15 +64,27 @@ func _forward_3d_gui_input(camera: Camera3D, event: InputEvent)-> int:
 			return EditorPlugin.AFTER_GUI_INPUT_PASS
 		if not event.pressed:
 			return EditorPlugin.AFTER_GUI_INPUT_PASS
-		if not event.button_index == 1:
+		if  event.button_index == 1:
+			print(event)
+			var undo_redo = get_undo_redo()
+			undo_redo.create_action("Add cell")
+			undo_redo.add_do_method(picked_voxel, "set_cell", new_box_position, 255)
+			undo_redo.add_undo_method(picked_voxel, "set_cell", new_box_position, 0)
+			undo_redo.commit_action()
+			return EditorPlugin.AFTER_GUI_INPUT_STOP
+		elif event.button_index == 2:
+			var undo_redo = get_undo_redo()
+			undo_redo.create_action("Remove cell")
+			undo_redo.add_do_method(picked_voxel, "set_cell", map_position, 0)
+			undo_redo.add_undo_method(picked_voxel, "set_cell", map_position, 255)
+			undo_redo.commit_action()
+			gizmo_plugin.show_face(null, null)
+			picked_voxel.update_gizmos()
+			return EditorPlugin.AFTER_GUI_INPUT_STOP
+		else:
 			return EditorPlugin.AFTER_GUI_INPUT_PASS
-		print(event)
+#	elif event is InputKeyEvent:
+#		if event.keycode == KEY_P:
+			
 		
-		var undo_redo = get_undo_redo()
-		undo_redo.create_action("Add cell")
-		undo_redo.add_do_method(picked_voxel, "set_cell", new_box_position, 1)
-		undo_redo.add_undo_method(picked_voxel, "set_cell", new_box_position, 0)
-		undo_redo.commit_action()
-
-		return EditorPlugin.AFTER_GUI_INPUT_STOP
 	return EditorPlugin.AFTER_GUI_INPUT_PASS
