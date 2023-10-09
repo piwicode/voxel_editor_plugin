@@ -31,6 +31,11 @@ func _handles(object):
 	return should_handle
 
 
+func _snap_one_sub_element(cell_local_pick: Vector3) -> Vector3i:
+	var snap_size = .15
+	# Assuming a pick on a cell from with coordinates from [-.5,.5]
+	return Vector3i(cell_local_pick * 2 * (1.0 + snap_size))
+	
 func _forward_3d_gui_input(camera: Camera3D, event: InputEvent)-> int:
 	if not should_handle:
 		return AFTER_GUI_INPUT_PASS
@@ -55,15 +60,19 @@ func _forward_3d_gui_input(camera: Camera3D, event: InputEvent)-> int:
 		
 		var local_normal = picked_voxel.global_transform.basis.inverse() * result.normal 
 		var map_position = Vector3i(picked_cell.position)
+		var snapping = _snap_one_sub_element(result.position - picked_cell.position)
 		var new_box_position = map_position + Vector3i(local_normal.round())
+
 #		print({map_position=map_position, local_normal=local_normal, new_box_position=new_box_position})
-		if gizmo_plugin.show_face(map_position, local_normal):
+#		print(snapping)
+		if gizmo_plugin.highlight(map_position, local_normal, snapping):
 			picked_voxel.update_gizmos()
 		
 		if not event is InputEventMouseButton:
 			return EditorPlugin.AFTER_GUI_INPUT_PASS
 		if not event.pressed:
 			return EditorPlugin.AFTER_GUI_INPUT_PASS
+
 		if  event.button_index == 1:
 			print(event)
 			var undo_redo = get_undo_redo()
@@ -78,7 +87,7 @@ func _forward_3d_gui_input(camera: Camera3D, event: InputEvent)-> int:
 			undo_redo.add_do_method(picked_voxel, "set_cell", map_position, 0)
 			undo_redo.add_undo_method(picked_voxel, "set_cell", map_position, 255)
 			undo_redo.commit_action()
-			gizmo_plugin.show_face(null, null)
+			gizmo_plugin.highlight(null, null, null)
 			picked_voxel.update_gizmos()
 			return EditorPlugin.AFTER_GUI_INPUT_STOP
 		else:
@@ -86,5 +95,4 @@ func _forward_3d_gui_input(camera: Camera3D, event: InputEvent)-> int:
 #	elif event is InputKeyEvent:
 #		if event.keycode == KEY_P:
 			
-		
 	return EditorPlugin.AFTER_GUI_INPUT_PASS
