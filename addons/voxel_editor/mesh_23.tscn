@@ -2,8 +2,8 @@
 
 [ext_resource type="ArrayMesh" uid="uid://cv5k5rq5d2xpd" path="res://addons/voxel_editor/mesh_23.res" id="1_xu4q0"]
 
-[sub_resource type="ConvexPolygonShape3D" id="ConvexPolygonShape3D_x8u7d"]
-points = PackedVector3Array(0.5, 0.5, 0.5, 0.5, 0.5, -0.5, -0.5, 0.5, -0.5, 0.5, -0.5, -0.5)
+[sub_resource type="ConvexPolygonShape3D" id="ConvexPolygonShape3D_npi7w"]
+points = PackedVector3Array(0.5, 0.5, 0.5, 0.5, 0.5, -0.5, -0.5, 0.5, 0.5, 0.5, -0.5, 0.5)
 
 [node name="box" type="MeshInstance3D"]
 mesh = ExtResource("1_xu4q0")
@@ -11,4 +11,4 @@ mesh = ExtResource("1_xu4q0")
 [node name="Area3D" type="Area3D" parent="."]
 
 [node name="CollisionShape3D" type="CollisionShape3D" parent="Area3D"]
-shape = SubResource("ConvexPolygonShape3D_x8u7d")
+shape = SubResource("ConvexPolygonShape3D_npi7w")
