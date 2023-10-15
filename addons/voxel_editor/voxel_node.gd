@@ -96,10 +96,10 @@ func _ready():
 func _enter_tree():
 	print("Add box to Voxel")
 	if map.size() == 0:
-		map[Vector3i(0, 0, 0)] = 23
+		map[Vector3i(0, 0, 0)] = 255
 		map[Vector3i(2, 0, 0)] = 95
 		map[Vector3i(4, 0, 0)] = 127
-		map[Vector3i(6, 0, 0)] = 255
+		map[Vector3i(6, 0, 0)] = 23
 		map[Vector3i(2, 2, 0)] = 63
 
 	# Clicking a children will edit this node.

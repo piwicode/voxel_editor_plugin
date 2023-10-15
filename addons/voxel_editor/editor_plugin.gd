@@ -113,13 +113,14 @@ func _forward_3d_gui_input(camera: Camera3D, event: InputEvent) -> int:
 		if not voxel_node is VoxelNode:
 			return EditorPlugin.AFTER_GUI_INPUT_PASS
 
-		var local_normal = voxel_node.global_transform.basis.inverse() * result.normal
-		var map_position = Vector3i(cell_node.position)
-		var snapping = _snap_one_sub_element(result.position - cell_node.position)
+		var global_to_map_coord = voxel_node.global_transform.affine_inverse()
+		var local_normal = (global_to_map_coord.basis * result.normal).normalized()
 
-#		print({map_position=map_position, local_normal=local_normal, new_box_position=new_box_position})
-#		print(snapping)
-		if gizmo_plugin.highlight(map_position, local_normal, snapping):
+		var map_position = Vector3i(cell_node.position)
+		var snapping = _snap_one_sub_element(
+			global_to_map_coord * result.position - cell_node.position
+		)
+		if gizmo_plugin.highlight(map_position, result.normal, snapping):
 			voxel_node.update_gizmos()
 
 		if not event is InputEventMouseButton:
