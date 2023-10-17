@@ -26,7 +26,6 @@ var current_snapping = null
 func highlight(coord, normal, snapping):
 	var changed = current_coord != coord or current_normal != normal or snapping != current_snapping
 	if changed:
-#		print({coord=coord, normal=normal, snapping=snapping})
 		current_coord = coord
 		current_normal = normal
 		current_snapping = snapping
@@ -35,8 +34,7 @@ func highlight(coord, normal, snapping):
 
 func _redraw(gizmo):
 	gizmo.clear()
-#	print(current_coord)
-	if not current_coord:
+	if current_coord == null:
 		print("Clear gizmo")
 		return
 

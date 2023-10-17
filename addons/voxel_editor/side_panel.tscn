@@ -1,0 +1,17 @@
+[gd_scene load_steps=2 format=3 uid="uid://cbmqudnf0tkph"]
+
+[ext_resource type="Script" path="res://addons/voxel_editor/side_panel.gd" id="1_jwkme"]
+
+[node name="Palette" type="ScrollContainer"]
+offset_right = 1246.0
+offset_bottom = 1421.0
+horizontal_scroll_mode = 3
+script = ExtResource("1_jwkme")
+
+[node name="Grid" type="GridContainer" parent="."]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(130, 0)
+layout_mode = 2
+columns = 4
+
+[connection signal="resized" from="." to="." method="_on_resized"]

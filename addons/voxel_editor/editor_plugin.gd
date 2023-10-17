@@ -1,13 +1,23 @@
 @tool
 extends EditorPlugin
-
+const Palette = preload("side_panel.tscn")
 const VoxelNode = preload("voxel_node.gd")
 const GizmoPlugin = preload("gizmo_plugin.gd")
-var gizmo_plugin = GizmoPlugin.new()
 
+var gizmo_plugin = GizmoPlugin.new()
+var palette : Control
+var last_voxel_node = null
+var last_map_position = null
+
+# True when the editor should process mouse input.
+var should_handle = false
 
 func _enter_tree():
-	print_debug()
+	print_debug("Editor plugin: enter tree")
+	palette = Palette.instantiate()
+
+	add_control_to_dock(DOCK_SLOT_RIGHT_UR, palette)
+		
 	add_node_3d_gizmo_plugin(gizmo_plugin)
 	add_custom_type("Voxel", "Node3D", VoxelNode, preload("icon.png"))
 	set_input_event_forwarding_always_enabled()
@@ -15,14 +25,11 @@ func _enter_tree():
 
 func _exit_tree():
 	print_debug()
+	palette.queue_free()
 	remove_node_3d_gizmo_plugin(gizmo_plugin)
 	remove_custom_type("Voxel")
 	# Stop pending interactions if any.
 	should_handle = false
-
-
-# True when the editor should process mouse input.
-var should_handle = false
 
 
 func _is_voxel_node(object):
@@ -82,19 +89,26 @@ static func mesh_id_bit(v: Vector3i):
 	return 1 << ((v.x + 1) / 2 + (v.y + 1) / 2 * 2 + (v.z + 1) / 2 * 4)
 
 
-func do_paint_cell_action(voxel_node, map_position: Vector3i, mesh_id: int):
+func do_paint_cell_action(voxel_node, map_position: Vector3i, mesh_id: int, color: Color):
 	var previous_mesh_id = voxel_node.get_cell(map_position)
+	var previous_color = voxel_node.get_cell_color(map_position)
 	var undo_redo = get_undo_redo()
 	undo_redo.create_action("Add cell")
-	undo_redo.add_do_method(voxel_node, "set_cell", map_position, mesh_id)
-	undo_redo.add_undo_method(voxel_node, "set_cell", map_position, previous_mesh_id)
+	undo_redo.add_do_method(voxel_node, "set_cell", map_position, mesh_id, color)
+	undo_redo.add_undo_method(voxel_node, "set_cell", map_position, previous_mesh_id, previous_color)
 	undo_redo.commit_action()
 
 
 func _forward_3d_gui_input(camera: Camera3D, event: InputEvent) -> int:
 	if not should_handle:
 		return AFTER_GUI_INPUT_PASS
-
+		
+	if event is InputEventKey:
+		if event.keycode == KEY_P and event.echo == false:
+			do_paint_cell_action(last_voxel_node, last_map_position, 
+				last_voxel_node.get_cell(last_map_position), palette.color)
+			print("paint")
+	
 	if event is InputEventMouse:
 		var ray_origin = camera.project_ray_origin(event.position)
 		var ray_end = ray_origin + camera.project_ray_normal(event.position) * camera.far
@@ -102,14 +116,12 @@ func _forward_3d_gui_input(camera: Camera3D, event: InputEvent) -> int:
 		query.collide_with_areas = true
 		var result = camera.get_world_3d().direct_space_state.intersect_ray(query)
 
-#		print("intersect ray result ", result)
 		if not result:
 			return EditorPlugin.AFTER_GUI_INPUT_PASS
 
 		var cell_node = result.collider.get_parent_node_3d()
 		var voxel_node = cell_node.get_parent_node_3d()
 
-#		print("parent ", picked_cell.name, " ", picked_voxel.name, " ", picked_voxel is VoxelNode)
 		if not voxel_node is VoxelNode:
 			return EditorPlugin.AFTER_GUI_INPUT_PASS
 
@@ -120,6 +132,9 @@ func _forward_3d_gui_input(camera: Camera3D, event: InputEvent) -> int:
 		var snapping = _snap_one_sub_element(
 			global_to_map_coord * result.position - cell_node.position
 		)
+		
+		last_voxel_node = voxel_node
+		last_map_position = map_position
 		if gizmo_plugin.highlight(map_position, result.normal, snapping):
 			voxel_node.update_gizmos()
 
@@ -139,7 +154,7 @@ func _forward_3d_gui_input(camera: Camera3D, event: InputEvent) -> int:
 					print("masked cell %x" % new_mesh_id)
 					new_mesh_id |= new_mesh_id >> max(0, FaceShift[-n]) << max(0, -FaceShift[-n])
 					print("new cell %x" % new_mesh_id)
-					do_paint_cell_action(voxel_node, new_box_position, new_mesh_id)
+					do_paint_cell_action(voxel_node, new_box_position, new_mesh_id, palette.color)
 					return EditorPlugin.AFTER_GUI_INPUT_STOP
 				[var t, var u]:  # Edge
 					if voxel_node.get_cell(map_position + snapping):
@@ -155,7 +170,7 @@ func _forward_3d_gui_input(camera: Camera3D, event: InputEvent) -> int:
 									new_mesh_id = new_mesh_id
 								}
 							)
-							do_paint_cell_action(voxel_node, new_box_position, new_mesh_id)
+							do_paint_cell_action(voxel_node, new_box_position, new_mesh_id, palette.color)
 							return EditorPlugin.AFTER_GUI_INPUT_STOP
 						elif voxel_node.get_cell(map_position + u):
 							var new_box_position = map_position + t
@@ -169,7 +184,7 @@ func _forward_3d_gui_input(camera: Camera3D, event: InputEvent) -> int:
 									new_mesh_id = new_mesh_id
 								}
 							)
-							do_paint_cell_action(voxel_node, new_box_position, new_mesh_id)
+							do_paint_cell_action(voxel_node, new_box_position, new_mesh_id, palette.color)
 							return EditorPlugin.AFTER_GUI_INPUT_STOP
 				[var a, var b, var c]:
 					print("Point")
@@ -182,7 +197,7 @@ func _forward_3d_gui_input(camera: Camera3D, event: InputEvent) -> int:
 						var uv = _enumerate_units(snapping - inormal)
 						var u = uv[0]
 						var v = uv[1]
-						print({u = u, v = v})
+						
 						if (
 							voxel_node.get_cell(edited_coord + u)
 							and voxel_node.get_cell(map_position + v)
@@ -193,18 +208,16 @@ func _forward_3d_gui_input(camera: Camera3D, event: InputEvent) -> int:
 								| mesh_id_bit(snapping - inormal * 2 - u * 2)
 								| mesh_id_bit(snapping - inormal * 2 - v * 2)
 							)
-							do_paint_cell_action(voxel_node, edited_coord, new_mesh_id)
+							do_paint_cell_action(voxel_node, edited_coord, new_mesh_id, palette.color)
 							return EditorPlugin.AFTER_GUI_INPUT_STOP
 
 		elif event.button_index == 2:
 			# Delete
-			do_paint_cell_action(voxel_node, map_position, 0)
+			do_paint_cell_action(voxel_node, map_position, 0, palette.color)
 			gizmo_plugin.highlight(null, null, null)
 			voxel_node.update_gizmos()
 			return EditorPlugin.AFTER_GUI_INPUT_STOP
 		else:
 			return EditorPlugin.AFTER_GUI_INPUT_PASS
-#	elif event is InputKeyEvent:
-#		if event.keycode == KEY_P:
 
 	return EditorPlugin.AFTER_GUI_INPUT_PASS
