@@ -1,16 +1,26 @@
 @tool
 extends Node3D
 
+# Describe the voxel completely.
+# Stores { mesh_id = int, color = Color } indexed by Vector3i coordinates.
 @export var map: Dictionary = {}
+
+# Stores { scene = PackedScene, mesh = Mesh, basis = Basis } indexed by mesh id.
+# The mesh id is a 8 bit integer, one per cube corner, set to 1 when there is
+# matter. bits are in order packed x first then y, then z.
 var mesh_index_map: Dictionary = build_mesh_index_map()
+
+# Stores StandardMaterial3D indexed by Color.
 var material_map: Dictionary
+
 
 func get_material_for(color: Color) -> StandardMaterial3D:
 	if not color in material_map:
-		var new_material = StandardMaterial3D.new() 
+		var new_material = StandardMaterial3D.new()
 		new_material.albedo_color = color
 		material_map[color] = new_material
 	return material_map[color]
+
 
 static func transform(mesh_id: int, basis: Basis) -> int:
 	var result = 0
@@ -45,6 +55,7 @@ static func build_mesh_index_map() -> Dictionary:
 static func coord_to_name(coord: Vector3i) -> String:
 	return "%s" % coord
 
+
 func set_cell(coord: Vector3i, mesh_id: int, color: Color):
 	print("set cell ", coord, " to ", mesh_id, " with color ", color)
 	assert(mesh_id == 0 or mesh_id in mesh_index_map, "Unknown mesh_id")
@@ -56,7 +67,7 @@ func set_cell(coord: Vector3i, mesh_id: int, color: Color):
 	if mesh_id == 0:
 		map.erase(coord)
 	else:
-		map[coord] = {mesh_id=mesh_id, color=color}
+		map[coord] = {mesh_id = mesh_id, color = color}
 		_instantiate(coord, mesh_id, color)
 
 
@@ -65,10 +76,12 @@ func get_cell(coord: Vector3i) -> int:
 		return map[coord].mesh_id
 	return 0
 
+
 func get_cell_color(coord: Vector3i) -> Color:
 	if coord in map:
 		return map[coord].color
 	return Color.WHITE_SMOKE
+
 
 func _instantiate(coord: Vector3i, mesh_id: int, color: Color):
 	var data = mesh_index_map[mesh_id]
@@ -90,11 +103,11 @@ func _ready():
 func _enter_tree():
 	print("Add box to Voxel")
 	if map.size() == 0:
-		map[Vector3i(0, 0, 0)] = {mesh_id=255, color=Color.LIGHT_GREEN}
-		map[Vector3i(2, 0, 0)] = {mesh_id=95, color=Color.LIGHT_BLUE}
-		map[Vector3i(4, 0, 0)] = {mesh_id=127, color=Color.WEB_GRAY}
-		map[Vector3i(6, 0, 0)] = {mesh_id=23, color=Color.WEB_GRAY}
-		map[Vector3i(2, 2, 0)] = {mesh_id=63, color=Color.WEB_GRAY}
+		map[Vector3i(0, 0, 0)] = {mesh_id = 255, color = Color.LIGHT_GREEN}
+		map[Vector3i(2, 0, 0)] = {mesh_id = 95, color = Color.LIGHT_BLUE}
+		map[Vector3i(4, 0, 0)] = {mesh_id = 127, color = Color.WEB_GRAY}
+		map[Vector3i(6, 0, 0)] = {mesh_id = 23, color = Color.WEB_GRAY}
+		map[Vector3i(2, 2, 0)] = {mesh_id = 63, color = Color.WEB_GRAY}
 
 	# Clicking a children will edit this node.
 	set_meta("_edit_group_", true)

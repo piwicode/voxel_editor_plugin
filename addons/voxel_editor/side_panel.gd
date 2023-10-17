@@ -2,7 +2,9 @@
 extends ScrollContainer
 
 const ColorButton = preload("color_button.tscn")
-var color : Color = Color.WHITE_SMOKE
+
+# Current selected color.
+var color: Color = Color.WHITE_SMOKE
 
 const palette = [
 	"#1abc9c",
@@ -229,22 +231,22 @@ const palette = [
 
 
 func _ready():
-	print("palette ready")
+	print_debug("Palette is ready")
 	for code in palette:
 		var button = ColorButton.instantiate()
 		button.connect("color_picked", _on_color_picked)
 		button.set_color(Color(code))
 		%Grid.add_child(button)
-
-
-func _process(delta):
-	pass
+	# Assuming there is at least a color.
+	%Grid.get_child(0)._pressed()
 
 
 func _on_color_picked(picked_color):
-	print("Pannel emit signal")
+	print_debug("Pannel emit signal")
 	color = picked_color
 
+
 func _on_resized():
+	# Adjust the number of columns according to the width.
 	var w = %Grid.get_child(0).size.x + %Grid.get_theme_constant("h_separation")
 	%Grid.columns = int(size.x / w)
