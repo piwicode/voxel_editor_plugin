@@ -3,7 +3,6 @@ extends ScrollContainer
 
 const ColorButton = preload("color_button.tscn")
 
-# Current selected color.
 var color: Color = Color.WHITE_SMOKE
 
 const palette = [
@@ -230,30 +229,57 @@ const palette = [
 ]
 
 
+static func create_color_button(color: Color) -> Node:
+	var button = ColorButton.instantiate()
+	button.connect("color_picked", _on_color_picked)
+	button.set_color(color)
+	return button
+
+
 func _ready():
 	print_debug("Palette is ready")
 	for code in palette:
-		var button = ColorButton.instantiate()
-		button.connect("color_picked", _on_color_picked)
-		button.set_color(Color(code))
-		%Grid.add_child(button)
+		%PaletteGrid.add_child(create_color_button(Color(code)))
 	# Assuming there is at least a color.
-	%Grid.get_child(0)._pressed()
+	%PaletteGrid.get_child(0)._pressed()
 
 
-func _on_color_picked(picked_color):
-	print_debug("Pannel emit signal")
+func is_new_recent_color(candidate: Color):
+	for child in %RecentGrid.get_children():
+		if child.get_color() == candidate:
+			return false
+	return true
+
+
+func set_color(color: Color):
+	_on_color_picked(color)
+
+
+func _on_color_picked(picked_color: Color):
+	const max_recent = 5
+	print_debug("Color picked ", picked_color)
+	if is_new_recent_color(picked_color):
+		print("new")
+		var new_color = create_color_button(Color(picked_color))
+		var grid = %RecentGrid
+		grid.add_child(new_color)
+		grid.move_child(new_color, 0)
+		if grid.get_child_count() > max_recent:
+			var deleted = grid.get_child(max_recent)
+			grid.remove_child(deleted)
+			deleted.queue_free()
 	color = picked_color
 
 
 func _on_resized():
 	# Adjust the number of columns according to the width.
-	var w = %Grid.get_child(0).size.x + %Grid.get_theme_constant("h_separation")
-	%Grid.columns = int(size.x / w)
+	var w = %PaletteGrid.get_child(0).size.x + %PaletteGrid.get_theme_constant("h_separation")
+	%PaletteGrid.columns = int(size.x / w)
+	%RecentGrid.columns = int(size.x / w)
 
 
 enum SymmetryMode { NO, XY_ODD, XY_EVEN }
 
 
 func symmetry_mode() -> SymmetryMode:
-	return %SymmetryButton.selected
+	return %SymmetryCombo.selected

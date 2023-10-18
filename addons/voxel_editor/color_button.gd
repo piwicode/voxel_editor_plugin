@@ -4,6 +4,10 @@ extends Button
 signal color_picked(color)
 
 
+func get_color() -> Color:
+	return $ColorRect.color
+
+
 func set_color(color: Color):
 	$ColorRect.color = color
 

@@ -122,13 +122,18 @@ func _forward_3d_gui_input(camera: Camera3D, event: InputEvent) -> int:
 
 	if event is InputEventKey:
 		if event.keycode == KEY_P and event.echo == false:
-			do_paint_cell_action(
-				last_voxel_node,
-				last_map_position,
-				last_voxel_node.get_cell(last_map_position),
-				palette.color
-			)
-			print("paint")
+			if event.shift_pressed:
+				# Pick color.
+				palette.set_color(last_voxel_node.get_cell_color(last_map_position))
+			else:
+				# Apply color
+				do_paint_cell_action(
+					last_voxel_node,
+					last_map_position,
+					last_voxel_node.get_cell(last_map_position),
+					palette.color
+				)
+				print("paint")
 
 	if event is InputEventMouse:
 		var ray_origin = camera.project_ray_origin(event.position)
@@ -189,8 +194,6 @@ func _forward_3d_gui_input(camera: Camera3D, event: InputEvent) -> int:
 						# o is the clicked edge.
 						# snapping is ↘ or ↖ depending on which cell was picked.
 						# We have to figure out which side has been picked.
-
-						# Project the pick ray direction in the (t, u) plane.
 						var snapping_ortho: Vector3i = t - u
 						var pick_sign = int(
 							signf((ray_end - ray_origin).dot(Vector3(snapping_ortho)))
@@ -210,8 +213,8 @@ func _forward_3d_gui_input(camera: Camera3D, event: InputEvent) -> int:
 							voxel_node, new_cell_position, new_mesh_id, palette.color
 						)
 						return EditorPlugin.AFTER_GUI_INPUT_STOP
-				[var a, var b, var c]:
-					print("Point")
+
+				[var a, var b, var c]:  # Point.
 					var inormal = Vector3i(local_normal.round())
 					var edited_coord = map_position + inormal
 
