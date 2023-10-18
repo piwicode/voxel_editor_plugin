@@ -171,6 +171,14 @@ func _forward_3d_gui_input(camera: Camera3D, event: InputEvent) -> int:
 
 		if event.button_index == 1:
 			match _enumerate_units(snapping):
+				[]:  # Inner face
+					# Triangle cylinder is turned into a cube.
+					do_paint_cell_action(
+						voxel_node,
+						map_position,
+						voxel_node.CUBE,
+						voxel_node.get_cell_color(map_position)
+					)
 				[var n]:  # Face, insert cube
 					var new_box_position = map_position + n
 					var undo_redo = get_undo_redo()
@@ -219,7 +227,8 @@ func _forward_3d_gui_input(camera: Camera3D, event: InputEvent) -> int:
 					var edited_coord = map_position + inormal
 
 					# Count how many axis the normal has.
-					# Normal component are 0, sqr(1/3) sqr(1/2) 1
+					# Normal component are 0, sqr(1/3), sqr(1/2), 1, all being
+					# in [0.5, 1.0] and {0.0, 1.0} once rounded.
 					if inormal.length_squared() == 1:
 						var uv = _enumerate_units(snapping - inormal)
 						var u = uv[0]
@@ -241,11 +250,47 @@ func _forward_3d_gui_input(camera: Camera3D, event: InputEvent) -> int:
 							return EditorPlugin.AFTER_GUI_INPUT_STOP
 
 		elif event.button_index == 2:
-			# Delete
-			do_paint_cell_action(voxel_node, map_position, 0, palette.color)
-			gizmo_plugin.highlight(null, null, null)
-			voxel_node.update_gizmos()
-			return EditorPlugin.AFTER_GUI_INPUT_STOP
+			print("bt2")
+			match _enumerate_units(snapping):
+				[]:  # Inner face => Delete the cell.
+					do_paint_cell_action(voxel_node, map_position, 0, palette.color)
+					gizmo_plugin.highlight(null, null, null)
+					voxel_node.update_gizmos()
+					return EditorPlugin.AFTER_GUI_INPUT_STOP
+				[_]:  # Box face => Delete the cell.
+					do_paint_cell_action(voxel_node, map_position, 0, palette.color)
+					gizmo_plugin.highlight(null, null, null)
+					voxel_node.update_gizmos()
+					return EditorPlugin.AFTER_GUI_INPUT_STOP
+				[var t, var u]:  # Box edge => Attempt to turn into a triangle cylinder.
+					if (
+						voxel_node.get_cell(map_position) == voxel_node.CUBE
+						and voxel_node.get_cell(map_position + t) == 0
+						and voxel_node.get_cell(map_position + u) == 0
+						and voxel_node.get_cell(map_position + t + u) == 0
+					):
+						do_paint_cell_action(
+							voxel_node,
+							map_position,
+							FaceMask[t] | FaceMask[u],
+							voxel_node.get_cell_color(map_position)
+						)
+					return EditorPlugin.AFTER_GUI_INPUT_STOP
+				[var t, var u, var v]:
+					if (
+						voxel_node.get_cell(map_position) == voxel_node.CUBE
+						and voxel_node.get_cell(map_position + t) == 0
+						and voxel_node.get_cell(map_position + u) == 0
+						and voxel_node.get_cell(map_position + v) == 0
+						and voxel_node.get_cell(map_position + t + u + v) == 0
+					):
+						do_paint_cell_action(
+							voxel_node,
+							map_position,
+							FaceMask[t] | FaceMask[u] | FaceMask[v],
+							voxel_node.get_cell_color(map_position)
+						)
+
 		else:
 			return EditorPlugin.AFTER_GUI_INPUT_PASS
 

@@ -1,6 +1,7 @@
 @tool
 extends Node3D
 
+const CUBE = 255
 # Describe the voxel completely.
 # Stores { mesh_id = int, color = Color } indexed by Vector3i coordinates.
 @export var map: Dictionary = {}
