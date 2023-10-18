@@ -179,38 +179,37 @@ func _forward_3d_gui_input(camera: Camera3D, event: InputEvent) -> int:
 					return EditorPlugin.AFTER_GUI_INPUT_STOP
 				[var t, var u]:  # Edge
 					if voxel_node.get_cell(map_position + snapping):
-						if voxel_node.get_cell(map_position + t):
-							var new_box_position = map_position + u
-							var new_mesh_id = FaceMask[u] | FaceMask[-t]
-							print(
-								{
-									t = t,
-									u = u,
-									fmu = FaceMask[-u],
-									fmt = FaceMask[t],
-									new_mesh_id = new_mesh_id
-								}
-							)
-							do_paint_cell_action(
-								voxel_node, new_box_position, new_mesh_id, palette.color
-							)
-							return EditorPlugin.AFTER_GUI_INPUT_STOP
-						elif voxel_node.get_cell(map_position + u):
-							var new_box_position = map_position + t
-							var new_mesh_id = FaceMask[t] | FaceMask[-u]
-							print(
-								{
-									t = t,
-									u = u,
-									fmt = FaceMask[-t],
-									fmu = FaceMask[u],
-									new_mesh_id = new_mesh_id
-								}
-							)
-							do_paint_cell_action(
-								voxel_node, new_box_position, new_mesh_id, palette.color
-							)
-							return EditorPlugin.AFTER_GUI_INPUT_STOP
+						# Attempt attempt to insert a triangle base cylinder.
+						#
+						# +---+  pick ray
+						# | A |↙
+						# +---o---+
+						#     | B |
+						#     +---+
+						# o is the clicked edge.
+						# snapping is ↘ or ↖ depending on which cell was picked.
+						# We have to figure out which side has been picked.
+
+						# Project the pick ray direction in the (t, u) plane.
+						var snapping_ortho: Vector3i = t - u
+						var pick_sign = int(
+							signf((ray_end - ray_origin).dot(Vector3(snapping_ortho)))
+						)
+						assert(pick_sign != 0., "edge should not be visible. please report.")
+						var new_cell_rel_pos = Vector3i(snapping - snapping_ortho * pick_sign) / 2
+						assert(new_cell_rel_pos == t or new_cell_rel_pos == u)
+						var new_cell_position = map_position + new_cell_rel_pos
+						assert(
+							voxel_node.get_cell(new_cell_position) == 0,
+							"cell should be empty. please report."
+						)
+						var new_mesh_id = (
+							FaceMask[new_cell_rel_pos] | FaceMask[new_cell_rel_pos - snapping]
+						)
+						do_paint_cell_action(
+							voxel_node, new_cell_position, new_mesh_id, palette.color
+						)
+						return EditorPlugin.AFTER_GUI_INPUT_STOP
 				[var a, var b, var c]:
 					print("Point")
 					var inormal = Vector3i(local_normal.round())
