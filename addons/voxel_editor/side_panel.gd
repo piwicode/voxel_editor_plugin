@@ -250,3 +250,10 @@ func _on_resized():
 	# Adjust the number of columns according to the width.
 	var w = %Grid.get_child(0).size.x + %Grid.get_theme_constant("h_separation")
 	%Grid.columns = int(size.x / w)
+
+
+enum SymmetryMode { NO, XY_ODD, XY_EVEN }
+
+
+func symmetry_mode() -> SymmetryMode:
+	return %SymmetryButton.selected

@@ -8,7 +8,22 @@ offset_bottom = 1421.0
 horizontal_scroll_mode = 3
 script = ExtResource("1_jwkme")
 
-[node name="Grid" type="GridContainer" parent="."]
+[node name="VBox" type="VBoxContainer" parent="."]
+layout_mode = 2
+
+[node name="SymmetryButton" type="OptionButton" parent="VBox"]
+unique_name_in_owner = true
+layout_mode = 2
+item_count = 3
+selected = 0
+popup/item_0/text = "Free"
+popup/item_0/id = 0
+popup/item_1/text = "XY symmetry odd "
+popup/item_1/id = 1
+popup/item_2/text = "XY symmetry even"
+popup/item_2/id = 2
+
+[node name="Grid" type="GridContainer" parent="VBox"]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(130, 0)
 layout_mode = 2

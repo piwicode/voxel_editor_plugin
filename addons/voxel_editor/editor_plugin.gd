@@ -91,14 +91,28 @@ static func mesh_id_bit(v: Vector3i):
 
 
 func do_paint_cell_action(voxel_node, map_position: Vector3i, mesh_id: int, color: Color):
-	var previous_mesh_id = voxel_node.get_cell(map_position)
-	var previous_color = voxel_node.get_cell_color(map_position)
 	var undo_redo = get_undo_redo()
 	undo_redo.create_action("Add cell")
 	undo_redo.add_do_method(voxel_node, "set_cell", map_position, mesh_id, color)
 	undo_redo.add_undo_method(
-		voxel_node, "set_cell", map_position, previous_mesh_id, previous_color
+		voxel_node,
+		"set_cell",
+		map_position,
+		voxel_node.get_cell(map_position),
+		voxel_node.get_cell_color(map_position)
 	)
+	# Avoid doing twice the job for odd symetry when z = 0.
+	if palette.symmetry_mode() == 2 or (palette.symmetry_mode() == 1 and map_position.z != 0):
+		map_position.z = palette.symmetry_mode() - 1 - map_position.z
+		undo_redo.add_do_method(voxel_node, "set_cell", map_position, mesh_id, color)
+		undo_redo.add_undo_method(
+			voxel_node,
+			"set_cell",
+			map_position,
+			voxel_node.get_cell(map_position),
+			voxel_node.get_cell_color(map_position)
+		)
+
 	undo_redo.commit_action()
 
 
