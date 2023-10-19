@@ -1,46 +1,34 @@
 @tool
 extends EditorPlugin
+
 const Palette = preload("side_panel.tscn")
 const VoxelNode = preload("voxel_node.gd")
 const GizmoPlugin = preload("gizmo_plugin.gd")
 
-var gizmo_plugin = GizmoPlugin.new()
+const FaceMask = {
+	Vector3i(1, 0, 0): 0xAA,
+	Vector3i(0, 1, 0): 0xCC,
+	Vector3i(0, 0, 1): 0xF0,
+	Vector3i(-1, 0, 0): 0x55,
+	Vector3i(0, -1, 0): 0x33,
+	Vector3i(0, 0, -1): 0x0F
+}
+
+const FaceShift = {
+	Vector3i(1, 0, 0): 1,
+	Vector3i(0, 1, 0): 2,
+	Vector3i(0, 0, 1): 4,
+	Vector3i(-1, 0, 0): -1,
+	Vector3i(0, -1, 0): -2,
+	Vector3i(0, 0, -1): -4
+}
+
+var gizmo_plugin: GizmoPlugin
 var palette: Control
+
 var last_voxel_node = null
 var last_map_position = null
-
-# True when the editor should process mouse input.
-var should_handle = false
-
-
-func _enter_tree():
-	print_debug("Editor plugin: enter tree")
-	palette = Palette.instantiate()
-
-	add_control_to_dock(DOCK_SLOT_RIGHT_UR, palette)
-
-	add_node_3d_gizmo_plugin(gizmo_plugin)
-	add_custom_type("Voxel", "Node3D", VoxelNode, preload("icon.png"))
-	set_input_event_forwarding_always_enabled()
-
-
-func _exit_tree():
-	print_debug()
-	palette.queue_free()
-	remove_node_3d_gizmo_plugin(gizmo_plugin)
-	remove_custom_type("Voxel")
-	# Stop pending interactions if any.
-	should_handle = false
-
-
-func _is_voxel_node(object):
-	return object is VoxelNode
-
-
-func _handles(object):
-	should_handle = object is VoxelNode
-	print("voxel editor plugin set should_handle to ", should_handle)
-	return should_handle
+var edited_voxel: VoxelNode = null
 
 
 ## Transforms intra-cell coordinates ([-.5, .5]³) into a snapped vector
@@ -65,29 +53,53 @@ static func _enumerate_units(v: Vector3i) -> Array:
 	return result
 
 
-const FaceMask = {
-	Vector3i(1, 0, 0): 0xAA,
-	Vector3i(0, 1, 0): 0xCC,
-	Vector3i(0, 0, 1): 0xF0,
-	Vector3i(-1, 0, 0): 0x55,
-	Vector3i(0, -1, 0): 0x33,
-	Vector3i(0, 0, -1): 0x0F
-}
-const FaceShift = {
-	Vector3i(1, 0, 0): 1,
-	Vector3i(0, 1, 0): 2,
-	Vector3i(0, 0, 1): 4,
-	Vector3i(-1, 0, 0): -1,
-	Vector3i(0, -1, 0): -2,
-	Vector3i(0, 0, -1): -4
-}
-
-
 static func mesh_id_bit(v: Vector3i):
 	assert(v.x == 1 or v.x == -1)
 	assert(v.y == 1 or v.y == -1)
 	assert(v.z == 1 or v.z == -1)
 	return 1 << ((v.x + 1) / 2 + (v.y + 1) / 2 * 2 + (v.z + 1) / 2 * 4)
+
+
+func _enter_tree():
+	palette = Palette.instantiate()
+	add_control_to_dock(DOCK_SLOT_RIGHT_UR, palette)
+
+	gizmo_plugin = GizmoPlugin.new()
+	add_node_3d_gizmo_plugin(gizmo_plugin)
+
+	add_custom_type("Voxel", "Node3D", VoxelNode, preload("icon.png"))
+	set_input_event_forwarding_always_enabled()
+
+
+func _exit_tree():
+	remove_control_from_docks(palette)
+	palette.queue_free()
+
+	remove_node_3d_gizmo_plugin(gizmo_plugin)
+	gizmo_plugin.queue_free()
+
+	remove_custom_type("Voxel")
+
+	# Stop any pending edition.
+	edited_voxel = null
+
+
+func _make_visible(visible: bool):
+	print("EditorPlugin make_visible ", visible)
+
+
+func _handles(object: Object):
+	# Object can be a VoxelNode, a MultiNodeEdit or any selectable type.
+	return object is VoxelNode
+
+
+func _edit(object: Object):
+	assert(object == null or object is VoxelNode)
+	var previous_edited = edited_voxel
+	edited_voxel = object
+	if previous_edited != edited_voxel:
+		gizmo_plugin.clear_highlight()
+	print("EditorPlugin edit ", object)
 
 
 func do_paint_cell_action(voxel_node, map_position: Vector3i, mesh_id: int, color: Color):
@@ -117,7 +129,7 @@ func do_paint_cell_action(voxel_node, map_position: Vector3i, mesh_id: int, colo
 
 
 func _forward_3d_gui_input(camera: Camera3D, event: InputEvent) -> int:
-	if not should_handle:
+	if edited_voxel == null:
 		return AFTER_GUI_INPUT_PASS
 
 	if event is InputEventKey:
@@ -161,8 +173,7 @@ func _forward_3d_gui_input(camera: Camera3D, event: InputEvent) -> int:
 
 		last_voxel_node = voxel_node
 		last_map_position = map_position
-		if gizmo_plugin.highlight(map_position, result.normal, snapping):
-			voxel_node.update_gizmos()
+		gizmo_plugin.highlight(voxel_node, map_position, result.normal, snapping)
 
 		if not event is InputEventMouseButton:
 			return EditorPlugin.AFTER_GUI_INPUT_PASS
@@ -203,9 +214,9 @@ func _forward_3d_gui_input(camera: Camera3D, event: InputEvent) -> int:
 						# snapping is ↘ or ↖ depending on which cell was picked.
 						# We have to figure out which side has been picked.
 						var snapping_ortho: Vector3i = t - u
-						var pick_sign = int(
-							signf((ray_end - ray_origin).dot(Vector3(snapping_ortho)))
-						)
+						var local_pick_dir = global_to_map_coord.basis * (ray_end - ray_origin)
+						var pick_sign = int(signf(local_pick_dir.dot(Vector3(snapping_ortho))))
+
 						assert(pick_sign != 0., "edge should not be visible. please report.")
 						var new_cell_rel_pos = Vector3i(snapping - snapping_ortho * pick_sign) / 2
 						assert(new_cell_rel_pos == t or new_cell_rel_pos == u)
@@ -254,13 +265,11 @@ func _forward_3d_gui_input(camera: Camera3D, event: InputEvent) -> int:
 			match _enumerate_units(snapping):
 				[]:  # Inner face => Delete the cell.
 					do_paint_cell_action(voxel_node, map_position, 0, palette.color)
-					gizmo_plugin.highlight(null, null, null)
-					voxel_node.update_gizmos()
+					gizmo_plugin.clear_highlight()
 					return EditorPlugin.AFTER_GUI_INPUT_STOP
 				[_]:  # Box face => Delete the cell.
 					do_paint_cell_action(voxel_node, map_position, 0, palette.color)
-					gizmo_plugin.highlight(null, null, null)
-					voxel_node.update_gizmos()
+					gizmo_plugin.clear_highlight()
 					return EditorPlugin.AFTER_GUI_INPUT_STOP
 				[var t, var u]:  # Box edge => Attempt to turn into a triangle cylinder.
 					if (

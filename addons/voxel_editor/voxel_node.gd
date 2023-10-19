@@ -85,6 +85,7 @@ func get_cell_color(coord: Vector3i) -> Color:
 
 
 func _instantiate(coord: Vector3i, mesh_id: int, color: Color):
+	var name = coord_to_name(coord)
 	var data = mesh_index_map[mesh_id]
 	var child = data.scene.instantiate()
 	child.name = coord_to_name(coord)
@@ -96,13 +97,32 @@ func _instantiate(coord: Vector3i, mesh_id: int, color: Color):
 
 func _ready():
 	print("Ready")
+	connect("visibility_changed", _on_visibility_changed)
+	# Clear children so that we don't get duplicated cells when the node is copied.
+	__clear_cell_children()
+	__populate_cell_children()
+
+
+func __clear_cell_children():
+	for child in get_children():
+		if not child.owner:
+			remove_child(child)
+			child.queue_free()
+
+
+func __populate_cell_children():
 	for key in map.keys():
-		var cell = map[key]
-		_instantiate(key, cell.mesh_id, cell.color)
+		_instantiate(key, map[key].mesh_id, map[key].color)
+
+
+func _on_visibility_changed():
+	if is_visible_in_tree():
+		__populate_cell_children()
+	else:
+		__clear_cell_children()
 
 
 func _enter_tree():
-	print("Add box to Voxel")
 	if map.size() == 0:
 		map[Vector3i(0, 0, 0)] = {mesh_id = 255, color = Color.LIGHT_GREEN}
 		map[Vector3i(2, 0, 0)] = {mesh_id = 95, color = Color.LIGHT_BLUE}
