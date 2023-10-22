@@ -60,10 +60,15 @@ static func mesh_id_bit(v: Vector3i):
 	return 1 << ((v.x + 1) / 2 + (v.y + 1) / 2 * 2 + (v.z + 1) / 2 * 4)
 
 
+func _on_export_requested():
+	if edited_voxel:
+		edited_voxel.export_mesh()
+
+
 func _enter_tree():
 	palette = Palette.instantiate()
 	add_control_to_dock(DOCK_SLOT_RIGHT_UR, palette)
-
+	palette.connect("export_requested", _on_export_requested)
 	gizmo_plugin = GizmoPlugin.new()
 	add_node_3d_gizmo_plugin(gizmo_plugin)
 
@@ -133,6 +138,8 @@ func _forward_3d_gui_input(camera: Camera3D, event: InputEvent) -> int:
 		return AFTER_GUI_INPUT_PASS
 
 	if event is InputEventKey:
+		if event.keycode == KEY_E and event.echo == false:
+			edited_voxel.export_mesh()
 		if event.keycode == KEY_P and event.echo == false:
 			if event.shift_pressed:
 				# Pick color.
@@ -226,7 +233,7 @@ func _forward_3d_gui_input(camera: Camera3D, event: InputEvent) -> int:
 							"cell should be empty. please report."
 						)
 						var new_mesh_id = (
-							FaceMask[new_cell_rel_pos] | FaceMask[new_cell_rel_pos - snapping]
+							FaceMask[-new_cell_rel_pos] | FaceMask[snapping - new_cell_rel_pos]
 						)
 						do_paint_cell_action(
 							voxel_node, new_cell_position, new_mesh_id, palette.color
@@ -281,7 +288,7 @@ func _forward_3d_gui_input(camera: Camera3D, event: InputEvent) -> int:
 						do_paint_cell_action(
 							voxel_node,
 							map_position,
-							FaceMask[t] | FaceMask[u],
+							FaceMask[-t] | FaceMask[-u],
 							voxel_node.get_cell_color(map_position)
 						)
 					return EditorPlugin.AFTER_GUI_INPUT_STOP

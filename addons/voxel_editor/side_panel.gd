@@ -283,3 +283,10 @@ enum SymmetryMode { NO, XY_ODD, XY_EVEN }
 
 func symmetry_mode() -> SymmetryMode:
 	return %SymmetryCombo.selected
+
+
+signal export_requested
+
+
+func _on_export_pressed():
+	emit_signal("export_requested")
