@@ -192,6 +192,7 @@ func export_mesh():
 				vertices = Transform3D(basis, Vector3.ZERO) * face.vertices,
 				normal = basis * face.normal
 			}
+
 	print(face_seeds)
 	var faces_by_mesh_bf = {}
 	for mesh_bf_seeds in MESH_BF_SEEDS:
@@ -223,7 +224,12 @@ func export_mesh():
 	arrays[Mesh.ARRAY_VERTEX] = vertices
 	arrays[Mesh.ARRAY_COLOR] = colors
 
-	var arr_mesh = ArrayMesh.new()
+	# Try to get the resource from the resource cache, if found modify it in
+	# place so that the editors gets updated.
+	var arr_mesh = load("res://export_test.tres")
+	if arr_mesh == null:  # Otherwise create a new resource.
+		arr_mesh = ArrayMesh.new()
+	arr_mesh.clear_surfaces()
 	arr_mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
 
 	ResourceSaver.save(arr_mesh, "res://export_test.tres", ResourceSaver.FLAG_COMPRESS)
@@ -248,7 +254,11 @@ func backup():
 	var convex_shape = arr_mesh.create_convex_shape()
 	var mesh = convex_shape.get_debug_mesh()
 	ResourceSaver.save(mesh, "res://export_test.tres", ResourceSaver.FLAG_COMPRESS)
-	print("surface_get_primitive_type ", mesh.surface_get_primitive_type(0))
+	print(
+		ResourceLoader.new().load(
+			"res://export_test.tres", "ArrayMesh", ResourceLoader.CACHE_MODE_REPLACE
+		)
+	)
 
 
 func _enter_tree():

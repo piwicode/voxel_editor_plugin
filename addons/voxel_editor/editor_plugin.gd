@@ -293,17 +293,15 @@ func _forward_3d_gui_input(camera: Camera3D, event: InputEvent) -> int:
 						)
 					return EditorPlugin.AFTER_GUI_INPUT_STOP
 				[var t, var u, var v]:
-					if (
-						voxel_node.get_cell(map_position) == voxel_node.CUBE
-						and voxel_node.get_cell(map_position + t) == 0
-						and voxel_node.get_cell(map_position + u) == 0
-						and voxel_node.get_cell(map_position + v) == 0
-						and voxel_node.get_cell(map_position + t + u + v) == 0
-					):
+					if voxel_node.get_cell(map_position) == voxel_node.CUBE:
+						#						and voxel_node.get_cell(map_position + t) == 0
+						#						and voxel_node.get_cell(map_position + u) == 0
+						#						and voxel_node.get_cell(map_position + v) == 0
+						#						and voxel_node.get_cell(map_position + t + u + v) == 0
 						do_paint_cell_action(
 							voxel_node,
 							map_position,
-							FaceMask[t] | FaceMask[u] | FaceMask[v],
+							FaceMask[-t] | FaceMask[-u] | FaceMask[-v],
 							voxel_node.get_cell_color(map_position)
 						)
 
