@@ -161,12 +161,14 @@ static func make_face(mask: int, bf: int, vertices: int, normal: Vector3):
 				bits >>= 1
 
 	if vertex_array.size() == 4:
-		vertex_array.append(vertex_array[2])
-		vertex_array.append(vertex_array[1])
+		vertex_array.insert(2, vertex_array[3])
+		vertex_array.insert(3, vertex_array[4])
+		vertex_array[5] = vertex_array[0]
+
 	assert(vertex_array.size() % 3 == 0)
 	if (vertex_array[0] - vertex_array[1]).cross(vertex_array[1] - vertex_array[2]).dot(normal) > 0:
 		vertex_array.reverse()
-	return {mask = mask, bf = bf, vertices = vertex_array, normal = normal}
+	return {mask = mask, bf = bf, vertices = vertex_array, normal = normal.normalized()}
 
 
 func export_mesh():
@@ -174,7 +176,7 @@ func export_mesh():
 	var face_seeds = [
 		make_face(0x0f, 0x0f, 0x0f, Vector3(0, 0, -1)),  # outer square.
 		make_face(0x0f, 0x07, 0x07, Vector3(0, 0, -1)),  # outer triangle.
-		make_face(0xff, 0x5f, 0x5a, Vector3(1, 1, 0)),  # inner square.
+		make_face(0xff, 0x5f, 0x5a, Vector3(1, 0, 1)),  # inner square.
 		make_face(0xff, 0x17, 0x16, Vector3(1, 1, 1)),  # inner triangle.
 		make_face(0xff, 0x7f, 0x68, Vector3(1, 1, 1)),  # inner triangle.
 	]
@@ -209,20 +211,37 @@ func export_mesh():
 	var vertices = PackedVector3Array()
 	var normals = PackedVector3Array()
 	var colors = PackedColorArray()
+	var uvs: PackedVector2Array = PackedVector2Array()
+	var UV_LST = {
+		3: PackedVector2Array([Vector2(1, 0), Vector2(1, -1), Vector2(0, 0)]),
+		6:
+		PackedVector2Array(
+			[
+				Vector2(0, 0),
+				Vector2(1, 0),
+				Vector2(1, 1),
+				Vector2(1, 1),
+				Vector2(0, 1),
+				Vector2(0, 0)
+			]
+		)
+	}
 	for coord in map:
 		var cell = map[coord]
 		for face in faces_by_mesh_bf[cell.mesh_id]:
 			# Skip if the face is replicated on the contiguous cube.
+			uvs.append_array(UV_LST[face.vertices.size()])
 			for vertex in face.vertices:
 				vertices.append(vertex + Vector3(coord))
 				normals.append(face.normal)
 				colors.append(cell.color.srgb_to_linear())
 
 	var arrays = []
-	arrays.resize(max(Mesh.ARRAY_MAX, Mesh.ARRAY_VERTEX, Mesh.ARRAY_NORMAL))
+	arrays.resize(max(Mesh.ARRAY_MAX, Mesh.ARRAY_VERTEX, Mesh.ARRAY_NORMAL, Mesh.ARRAY_TEX_UV))
 	arrays[Mesh.ARRAY_NORMAL] = normals
 	arrays[Mesh.ARRAY_VERTEX] = vertices
 	arrays[Mesh.ARRAY_COLOR] = colors
+	arrays[Mesh.ARRAY_TEX_UV] = uvs
 
 	# Try to get the resource from the resource cache, if found modify it in
 	# place so that the editors gets updated.
