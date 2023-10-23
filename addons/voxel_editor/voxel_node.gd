@@ -43,6 +43,15 @@ const ORTHO_BASES = [
 	Basis(Vector3(0, -1, 0), Vector3(0, 0, -1), Vector3(1, 0, 0))
 ]
 
+const FaceShift = {
+	Vector3i(1, 0, 0): 1,
+	Vector3i(0, 1, 0): 2,
+	Vector3i(0, 0, 1): 4,
+	Vector3i(-1, 0, 0): -1,
+	Vector3i(0, -1, 0): -2,
+	Vector3i(0, 0, -1): -4
+}
+
 
 func get_material_for(color: Color) -> StandardMaterial3D:
 	if not color in material_map:
@@ -150,7 +159,7 @@ func _on_visibility_changed():
 		__clear_cell_children()
 
 
-static func make_face(mask: int, bf: int, vertices: int, normal: Vector3):
+static func make_face(mask: int, bf: int, vertices: int, normal: Vector3, outer: bool):
 	var vertex_array = PackedVector3Array()
 	var bits = vertices
 	for z in BOX_AXIS_VALUES:
@@ -168,17 +177,29 @@ static func make_face(mask: int, bf: int, vertices: int, normal: Vector3):
 	assert(vertex_array.size() % 3 == 0)
 	if (vertex_array[0] - vertex_array[1]).cross(vertex_array[1] - vertex_array[2]).dot(normal) > 0:
 		vertex_array.reverse()
-	return {mask = mask, bf = bf, vertices = vertex_array, normal = normal.normalized()}
+	var n_i = Vector3i(normal)
+	return {
+		mask = mask,
+		bf = bf,
+		vertices = vertex_array,
+		normal = normal.normalized(),
+		neighbour = n_i if outer else null,
+		neighbour_mask =
+		bf << max(0, FaceShift[-n_i]) >> max(0, -FaceShift[-n_i]) if outer else null,
+		neighbour_value =
+		bf << max(0, FaceShift[-n_i]) >> max(0, -FaceShift[-n_i]) if outer else null
+	}
 
 
 func export_mesh():
 	print("Export mesh")
+	var time_start = Time.get_ticks_usec()
 	var face_seeds = [
-		make_face(0x0f, 0x0f, 0x0f, Vector3(0, 0, -1)),  # outer square.
-		make_face(0x0f, 0x07, 0x07, Vector3(0, 0, -1)),  # outer triangle.
-		make_face(0xff, 0x5f, 0x5a, Vector3(1, 0, 1)),  # inner square.
-		make_face(0xff, 0x17, 0x16, Vector3(1, 1, 1)),  # inner triangle.
-		make_face(0xff, 0x7f, 0x68, Vector3(1, 1, 1)),  # inner triangle.
+		make_face(0x0f, 0x0f, 0x0f, Vector3(0, 0, -1), true),  # outer square.
+		make_face(0x0f, 0x07, 0x07, Vector3(0, 0, -1), true),  # outer triangle.
+		make_face(0xff, 0x5f, 0x5a, Vector3(1, 0, 1), false),  # inner square.
+		make_face(0xff, 0x17, 0x16, Vector3(1, 1, 1), false),  # inner triangle.
+		make_face(0xff, 0x7f, 0x68, Vector3(1, 1, 1), false),  # inner triangle.
 	]
 
 	var face_by_bf = {}
@@ -192,10 +213,13 @@ func export_mesh():
 				bf = bf,
 				# TODO: use the basis once Basis implement * operator for PackedVector3Array.
 				vertices = Transform3D(basis, Vector3.ZERO) * face.vertices,
-				normal = basis * face.normal
+				normal = basis * face.normal,
+				neighbour = Vector3i(basis * face.normal) if face.neighbour else null,
+				neighbour_mask =
+				transform_bf(face.neighbour_mask, basis) if face.neighbour else null,
+				neighbour_value =
+				transform_bf(face.neighbour_value, basis) if face.neighbour else null,
 			}
-
-	print(face_seeds)
 	var faces_by_mesh_bf = {}
 	for mesh_bf_seeds in MESH_BF_SEEDS:
 		for basis in ORTHO_BASES:
@@ -208,10 +232,6 @@ func export_mesh():
 					faces.append(face)
 			faces_by_mesh_bf[mesh_bf] = faces
 
-	var vertices = PackedVector3Array()
-	var normals = PackedVector3Array()
-	var colors = PackedColorArray()
-	var uvs: PackedVector2Array = PackedVector2Array()
 	var UV_LST = {
 		3: PackedVector2Array([Vector2(1, 0), Vector2(1, -1), Vector2(0, 0)]),
 		6:
@@ -226,9 +246,20 @@ func export_mesh():
 			]
 		)
 	}
+	var time_const_done = Time.get_ticks_usec()
+	var vertices = PackedVector3Array()
+	var normals = PackedVector3Array()
+	var colors = PackedColorArray()
+	var uvs: PackedVector2Array = PackedVector2Array()
+	var skipped = 0
 	for coord in map:
 		var cell = map[coord]
 		for face in faces_by_mesh_bf[cell.mesh_id]:
+			if face.neighbour:
+				if get_cell(coord + face.neighbour) & face.neighbour_mask == face.neighbour_value:
+					skipped += face.vertices.size()
+					continue  # If the neighbour covers that face.
+
 			# Skip if the face is replicated on the contiguous cube.
 			uvs.append_array(UV_LST[face.vertices.size()])
 			for vertex in face.vertices:
@@ -242,6 +273,7 @@ func export_mesh():
 	arrays[Mesh.ARRAY_VERTEX] = vertices
 	arrays[Mesh.ARRAY_COLOR] = colors
 	arrays[Mesh.ARRAY_TEX_UV] = uvs
+	var time_geom_done = Time.get_ticks_usec()
 
 	# Try to get the resource from the resource cache, if found modify it in
 	# place so that the editors gets updated.
@@ -250,9 +282,13 @@ func export_mesh():
 		arr_mesh = ArrayMesh.new()
 	arr_mesh.clear_surfaces()
 	arr_mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
-
+	var time_mesh_done = Time.get_ticks_usec()
 	ResourceSaver.save(arr_mesh, "res://export_test.tres", ResourceSaver.FLAG_COMPRESS)
-	print("Done")
+	print("Done ", vertices.size(), " vertices (", skipped, " skipped)")
+	print(" - const ", (time_const_done - time_start) / 1000., " ms")
+	print(" - geom ", (time_geom_done - time_const_done) / 1000., " ms")
+	print(" - mesh ", (time_mesh_done - time_geom_done) / 1000., " ms")
+	print(" - all ", (time_mesh_done - time_start) / 1000., " ms")
 
 
 func backup():
