@@ -291,31 +291,6 @@ func export_mesh():
 	print(" - all ", (time_mesh_done - time_start) / 1000., " ms")
 
 
-func backup():
-	var mesh_id = 127
-	var vertices = PackedVector3Array()
-
-	for z in BOX_AXIS_VALUES:
-		for y in BOX_AXIS_VALUES:
-			for x in BOX_AXIS_VALUES:
-				if mesh_id & 1:
-					vertices.append(Vector3(x, y, z))
-				mesh_id >>= 1
-	var arrays = []
-	arrays.resize(Mesh.ARRAY_MAX)
-	arrays[Mesh.ARRAY_VERTEX] = vertices
-	var arr_mesh = ArrayMesh.new()
-	arr_mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
-	var convex_shape = arr_mesh.create_convex_shape()
-	var mesh = convex_shape.get_debug_mesh()
-	ResourceSaver.save(mesh, "res://export_test.tres", ResourceSaver.FLAG_COMPRESS)
-	print(
-		ResourceLoader.new().load(
-			"res://export_test.tres", "ArrayMesh", ResourceLoader.CACHE_MODE_REPLACE
-		)
-	)
-
-
 func _enter_tree():
 	if map.size() == 0:
 		map[Vector3i(0, 0, 0)] = {mesh_id = 255, color = Color(1, 0, 0)}
