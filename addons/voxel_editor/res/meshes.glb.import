@@ -4,12 +4,12 @@ importer="scene"
 importer_version=1
 type="PackedScene"
 uid="uid://1aerjeygkm1s"
-path="res://.godot/imported/meshes.glb-0d9d15b5904e2a5af50685301bde9db1.scn"
+path="res://.godot/imported/meshes.glb-099e51eee6b60641035bf65daebe03a5.scn"
 
 [deps]
 
-source_file="res://addons/voxel_editor/meshes.glb"
-dest_files=["res://.godot/imported/meshes.glb-0d9d15b5904e2a5af50685301bde9db1.scn"]
+source_file="res://addons/voxel_editor/res/meshes.glb"
+dest_files=["res://.godot/imported/meshes.glb-099e51eee6b60641035bf65daebe03a5.scn"]
 
 [params]
 
@@ -38,7 +38,7 @@ _subresources={
 "lods/normal_split_angle": 25.0,
 "save_to_file/enabled": true,
 "save_to_file/make_streamable": "",
-"save_to_file/path": "res://addons/voxel_editor/mesh_95.res"
+"save_to_file/path": "res://addons/voxel_editor/res/mesh_95.res"
 },
 "meshes_Cube_001": {
 "generate/lightmap_uv": 0,
@@ -48,7 +48,7 @@ _subresources={
 "lods/normal_split_angle": 25.0,
 "save_to_file/enabled": true,
 "save_to_file/make_streamable": "",
-"save_to_file/path": "res://addons/voxel_editor/mesh_127.res"
+"save_to_file/path": "res://addons/voxel_editor/res/mesh_127.res"
 },
 "meshes_Cube_002": {
 "generate/lightmap_uv": 0,
@@ -58,7 +58,7 @@ _subresources={
 "lods/normal_split_angle": 25.0,
 "save_to_file/enabled": true,
 "save_to_file/make_streamable": "",
-"save_to_file/path": "res://addons/voxel_editor/mesh_255.res"
+"save_to_file/path": "res://addons/voxel_editor/res/mesh_255.res"
 },
 "meshes_Cube_004": {
 "generate/lightmap_uv": 0,
@@ -68,7 +68,7 @@ _subresources={
 "lods/normal_split_angle": 25.0,
 "save_to_file/enabled": true,
 "save_to_file/make_streamable": "",
-"save_to_file/path": "res://addons/voxel_editor/mesh_23.res"
+"save_to_file/path": "res://addons/voxel_editor/res/mesh_23.res"
 }
 }
 }

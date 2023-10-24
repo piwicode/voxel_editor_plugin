@@ -79,8 +79,8 @@ static func build_mesh_index_map() -> Dictionary:
 	var mapping = {}
 
 	for mesh_id in MESH_BF_SEEDS:
-		var scene = load("res://addons/voxel_editor/mesh_%d.tscn" % mesh_id)
-		var mesh = load("res://addons/voxel_editor/mesh_%d.res" % mesh_id)
+		var scene = load("res://addons/voxel_editor/res/mesh_%d.tscn" % mesh_id)
+		var mesh = load("res://addons/voxel_editor/res/mesh_%d.res" % mesh_id)
 		for basis in ORTHO_BASES:
 			var rotated_mesh_id = transform_bf(mesh_id, basis)
 			if not rotated_mesh_id in mapping:
