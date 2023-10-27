@@ -2,51 +2,55 @@
 
 [ext_resource type="Script" path="res://addons/voxel_editor/side_panel.gd" id="1_jwkme"]
 
-[node name="Palette" type="ScrollContainer"]
+[node name="Voxel" type="ScrollContainer"]
 offset_right = 1246.0
 offset_bottom = 1421.0
 horizontal_scroll_mode = 3
 script = ExtResource("1_jwkme")
 
-[node name="VBox" type="VBoxContainer" parent="."]
+[node name="Content" type="VBoxContainer" parent="."]
+unique_name_in_owner = true
 layout_mode = 2
 
-[node name="Export" type="Button" parent="VBox"]
+[node name="Export" type="Button" parent="Content"]
 layout_mode = 2
 text = "Export"
 
-[node name="HBoxContainer" type="HBoxContainer" parent="VBox"]
+[node name="HSeparator" type="HSeparator" parent="Content"]
 layout_mode = 2
 
-[node name="Label" type="Label" parent="VBox/HBoxContainer"]
+[node name="HBoxContainer" type="HBoxContainer" parent="Content"]
+layout_mode = 2
+
+[node name="Label" type="Label" parent="Content/HBoxContainer"]
 layout_mode = 2
 text = "Symmetry:"
 
-[node name="SymmetryCombo" type="OptionButton" parent="VBox/HBoxContainer"]
+[node name="SymmetryCombo" type="OptionButton" parent="Content/HBoxContainer"]
 unique_name_in_owner = true
 layout_mode = 2
 item_count = 3
 selected = 0
 popup/item_0/text = "None"
 popup/item_0/id = 0
-popup/item_1/text = "XY  odd"
-popup/item_1/id = 1
-popup/item_2/text = "XY  even"
-popup/item_2/id = 2
+popup/item_1/text = "XY  even"
+popup/item_1/id = 2
+popup/item_2/text = "XY  odd"
+popup/item_2/id = 1
 
-[node name="RecentGrid" type="GridContainer" parent="VBox"]
+[node name="RecentGrid" type="GridContainer" parent="Content"]
 unique_name_in_owner = true
 layout_mode = 2
 
-[node name="Label2" type="Label" parent="VBox"]
+[node name="Label2" type="Label" parent="Content"]
 layout_mode = 2
 text = "Palette:"
 
-[node name="PaletteGrid" type="GridContainer" parent="VBox"]
+[node name="PaletteGrid" type="GridContainer" parent="Content"]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(130, 0)
 layout_mode = 2
 columns = 4
 
 [connection signal="resized" from="." to="." method="_on_resized"]
-[connection signal="pressed" from="VBox/Export" to="." method="_on_export_pressed"]
+[connection signal="pressed" from="Content/Export" to="." method="_on_export_pressed"]

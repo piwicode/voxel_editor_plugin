@@ -1,10 +1,15 @@
 @tool
 extends Node3D
+class_name VoxelNode
 
 const CUBE = 255
 # Describe the voxel completely.
 # Stores { mesh_id = int, color = Color } indexed by Vector3i coordinates.
 @export var map: Dictionary = {}
+
+# Location of the exported mesh.
+# If empty, the mesh name is derived from the Node name.
+@export var export_path: String = ""
 
 # Stores { scene = PackedScene, mesh = Mesh, basis = Basis } indexed by mesh id.
 # The mesh id is a 8 bit integer, one per cube corner, set to 1 when there is
