@@ -1,10 +1,14 @@
 @tool
-class_name VectorEditor
+class_name VoxelEditor
 extends EditorPlugin
 
 const Palette = preload("side_panel.tscn")
-const VoxelNode = preload("voxel_node.gd")
-const GizmoPlugin = preload("gizmo_plugin.gd")
+
+var gizmo_plugin: GizmoPlugin
+var palette: Control
+
+var voxel: VoxelNode = null
+var current_tool: Tool = PaintTool.new()
 
 const FaceMask = {
 	Vector3i(1, 0, 0): 0xAA,
@@ -24,17 +28,10 @@ const FaceShift = {
 	Vector3i(0, 0, -1): -4
 }
 
-var gizmo_plugin: GizmoPlugin
-var palette: Control
-
-var last_voxel_node = null
-var edited_voxel: VoxelNode = null
-var current_tool = PaintTool.new()
-
 
 func _on_export_requested():
-	if edited_voxel:
-		edited_voxel.export_mesh()
+	if voxel:
+		voxel.export_mesh()
 
 
 func _enter_tree():
@@ -58,7 +55,7 @@ func _exit_tree():
 	remove_custom_type("Voxel")
 
 	# Stop any pending edition.
-	edited_voxel = null
+	voxel = null
 
 
 func _make_visible(visible: bool):
@@ -72,9 +69,9 @@ func _handles(object: Object):
 
 func _edit(object: Object):
 	assert(object == null or object is VoxelNode)
-	var previous_edited = edited_voxel
-	edited_voxel = object
-	if previous_edited != edited_voxel:
+	var previous_edited = voxel
+	voxel = object
+	if previous_edited != voxel:
 		gizmo_plugin.clear()
 	print("EditorPlugin edit ", object)
 
@@ -140,29 +137,17 @@ class VolumeCreationTool:
 	var state: State = State.LURK
 	var plane = Plane(Vector3.UP, -.49)
 
-	func on_input(
-		editor: EditorPlugin,
-		voxel: VoxelNode,
-		gizmo_plugin: GizmoPlugin,
-		camera: Camera3D,
-		event: InputEvent
-	) -> int:
+	func on_input(editor: EditorPlugin, camera: Camera3D, event: InputEvent) -> int:
 		if event is InputEventKey:
 			if event.keycode == KEY_ESCAPE:
 				return QUIT
 		elif event is InputEventMouse:
-			on_mouse_input(editor, voxel, gizmo_plugin, camera, event)
+			on_mouse_input(editor, camera, event)
 			if LeftButton(event):
 				return CONSUME_EVENT
 		return PASS_EVENT
 
-	func on_mouse_input(
-		editor: EditorPlugin,
-		voxel: VoxelNode,
-		gizmo_plugin: GizmoPlugin,
-		camera: Camera3D,
-		event: InputEventMouse
-	):
+	func on_mouse_input(editor: EditorPlugin, camera: Camera3D, event: InputEventMouse):
 		match state:
 			State.LURK:
 				var picked_point = plane.intersects_ray(
@@ -176,8 +161,8 @@ class VolumeCreationTool:
 				print(picked_point)
 				var aabb = AABB(first_click_coord, Vector3.ZERO)
 
-				gizmo_plugin.debug_point = picked_point
-				gizmo_plugin.draw_volume(voxel, aabb)
+				editor.gizmo_plugin.debug_point = picked_point
+				editor.gizmo_plugin.draw_volume(editor.voxel, aabb)
 				if not LeftPress(event):
 					return
 				state = State.DEFINING_SURFACE
@@ -192,8 +177,8 @@ class VolumeCreationTool:
 				second_click_coord = Vector3i(picked_point.round())
 				var aabb = AABB(first_click_coord, Vector3.ZERO)
 				aabb = aabb.expand(second_click_coord)
-				gizmo_plugin.debug_point = picked_point
-				gizmo_plugin.draw_volume(voxel, aabb)
+				editor.gizmo_plugin.debug_point = picked_point
+				editor.gizmo_plugin.draw_volume(editor.voxel, aabb)
 				if LeftRelease(event):
 					state = State.DEFINIG_VOLUME
 			State.DEFINIG_VOLUME:
@@ -204,30 +189,31 @@ class VolumeCreationTool:
 					camera.project_ray_origin(event.position),
 					camera.project_ray_normal(event.position)
 				)
-				# print(Time.get_ticks_usec() - start)
 				var aabb = AABB(first_click_coord, Vector3.ZERO)
 				aabb = aabb.expand(second_click_coord)
 				aabb = aabb.expand(approach.round())
-				gizmo_plugin.draw_volume(voxel, aabb)
-				gizmo_plugin.debug_point = approach
+				editor.gizmo_plugin.draw_volume(editor.voxel, aabb)
+				editor.gizmo_plugin.debug_point = approach
 				if LeftRelease(event):
-					editor.do_paint_volume_action(voxel, aabb, VoxelNode.CUBE, editor.palette.color)
+					editor.do_paint_volume_action(
+						editor.voxel, aabb, VoxelNode.CUBE, editor.palette.color
+					)
 					state = State.LURK
 				elif RightRelease(event):
-					editor.do_paint_volume_action(voxel, aabb, 0, editor.palette.color)
+					editor.do_paint_volume_action(editor.voxel, aabb, 0, editor.palette.color)
 					state = State.LURK
 
 
 func _forward_3d_gui_input(camera: Camera3D, event: InputEvent) -> int:
-	if edited_voxel == null:
+	if voxel == null:
 		return AFTER_GUI_INPUT_PASS
 	if event is InputEventKey:
 		if event.pressed and event.keycode == KEY_V and event.echo == false:
 			current_tool = VolumeCreationTool.new()
-	var r = current_tool.on_input(self, edited_voxel, gizmo_plugin, camera, event)
+	var r = current_tool.on_input(self, camera, event)
 	if r == VolumeCreationTool.QUIT:
 		print("Tool quit")
-		edited_voxel.clear_gizmos()
+		voxel.clear_gizmos()
 		current_tool = PaintTool.new()
 		return EditorPlugin.AFTER_GUI_INPUT_STOP
 	elif r == VolumeCreationTool.CONSUME_EVENT:
@@ -239,29 +225,21 @@ func _forward_3d_gui_input(camera: Camera3D, event: InputEvent) -> int:
 class PaintTool:
 	extends Tool
 	var last_map_position = null
-	var last_voxel_node = null
-	var palette
 
-	func on_input(
-		editor: VectorEditor,
-		voxel: VoxelNode,
-		gizmo_plugin: GizmoPlugin,
-		camera: Camera3D,
-		event: InputEvent
-	) -> int:
+	func on_input(editor: VoxelEditor, camera: Camera3D, event: InputEvent) -> int:
 		if event is InputEventKey:
 			if event.pressed and event.keycode == KEY_E and event.echo == false:
-				voxel.export_mesh()
+				editor.voxel.export_mesh()
 			if event.pressed and event.keycode == KEY_P and event.echo == false:
 				if event.shift_pressed:
 					# Pick color.
-					editor.palette.set_color(voxel.get_cell_color(last_map_position))
+					editor.palette.set_color(editor.voxel.get_cell_color(last_map_position))
 				else:
 					# Apply color
 					editor.do_paint_cell_action(
-						voxel,
+						editor.voxel,
 						last_map_position,
-						voxel.get_cell(last_map_position),
+						editor.voxel.get_cell(last_map_position),
 						editor.palette.color
 					)
 					print("paint")
@@ -290,9 +268,8 @@ class PaintTool:
 				global_to_map_coord * result.position - cell_node.position
 			)
 
-			last_voxel_node = voxel_node
 			last_map_position = map_position
-			gizmo_plugin.highlight(voxel_node, map_position, result.normal, snapping)
+			editor.gizmo_plugin.highlight(voxel_node, map_position, result.normal, snapping)
 
 			if not event is InputEventMouseButton:
 				return PASS_EVENT
@@ -391,13 +368,13 @@ class PaintTool:
 						editor.do_paint_cell_action(
 							voxel_node, map_position, 0, editor.palette.color
 						)
-						gizmo_plugin.clear()
+						editor.gizmo_plugin.clear()
 						return CONSUME_EVENT
 					[_]:  # Box face => Delete the cell.
 						editor.do_paint_cell_action(
 							voxel_node, map_position, 0, editor.palette.color
 						)
-						gizmo_plugin.clear()
+						editor.gizmo_plugin.clear()
 						return CONSUME_EVENT
 					[var t, var u]:  # Box edge => Attempt to turn into a triangle cylinder.
 						if (

@@ -2,7 +2,8 @@ class_name GizmoPlugin
 extends EditorNode3DGizmoPlugin
 
 const SelectMaterial = preload("select.tres")
-var debug_point
+
+var debug_point = null
 var __current_drawable = null
 var __current_voxel = null
 
@@ -55,7 +56,6 @@ func _redraw(gizmo: EditorNode3DGizmo):
 
 
 class Drawable:
-	# The drawable should
 	func draw(plugin: GizmoPlugin, gizmo: EditorNode3DGizmo):
 		pass
 
