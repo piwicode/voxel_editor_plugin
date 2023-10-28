@@ -101,6 +101,17 @@ func do_paint_volume_action(voxel_node, aabb: AABB, mesh_id: int, color: Color):
 class Tool:
 	enum { PASS_EVENT, CONSUME_EVENT, QUIT }
 
+	static func __inresect_pick_ray(camera: Camera3D, event: InputEventMouse) -> Dictionary:
+		var origin = camera.project_ray_origin(event.position)
+		var end = origin + camera.project_ray_normal(event.position) * camera.far
+		var query = PhysicsRayQueryParameters3D.create(origin, end)
+		query.collide_with_areas = true
+		return {
+			origin = origin,
+			end = end,
+			result = camera.get_world_3d().direct_space_state.intersect_ray(query)
+		}
+
 
 class VolumeCreationTool:
 	extends Tool
@@ -108,10 +119,16 @@ class VolumeCreationTool:
 	enum State { LURK, DEFINING_SURFACE, DEFINIG_VOLUME }
 
 	var first_click_normal: Vector3i
-	var first_click_coord: Vector3i
-	var second_click_coord: Vector3i
+	var click_coords = [null, null, null]
 	var state: State = State.LURK
 	var plane = Plane(Vector3.UP, -.49)
+
+	func aabb() -> AABB:
+		var aabb = AABB(click_coords[0].round(), Vector3.ZERO)
+		for v in click_coords:
+			if v != null:
+				aabb = aabb.expand(v.round())
+		return aabb
 
 	func on_input(editor: EditorPlugin, camera: Camera3D, event: InputEvent) -> int:
 		if event is InputEventKey:
@@ -126,21 +143,26 @@ class VolumeCreationTool:
 	func on_mouse_input(editor: EditorPlugin, camera: Camera3D, event: InputEventMouse):
 		match state:
 			State.LURK:
-				var picked_point = plane.intersects_ray(
-					camera.project_ray_origin(event.position),
-					camera.project_ray_normal(event.position)
-				)
-				if picked_point == null:
-					return
-				first_click_normal = Vector3i.UP
-				first_click_coord = Vector3i(picked_point.round())
-				print(picked_point)
-				var aabb = AABB(first_click_coord, Vector3.ZERO)
+				var wpick = __inresect_pick_ray(camera, event)
 
-				editor.gizmo_plugin.debug_point = picked_point
-				editor.gizmo_plugin.draw_volume(editor.voxel, aabb)
+				if wpick.result:
+					first_click_normal = wpick.result.normal
+					click_coords[0] = wpick.result.position + wpick.result.normal * 0.01
+				else:
+					var pick = Plane(Vector3.UP, -.49).intersects_ray(
+						camera.project_ray_origin(event.position),
+						camera.project_ray_normal(event.position)
+					)
+					if pick == null:
+						return
+					first_click_normal = plane.normal
+					click_coords[0] = pick
+
+				editor.gizmo_plugin.debug_point = click_coords[0]
+				editor.gizmo_plugin.draw_volume(editor.voxel, aabb())
 				if not Event.LeftPress(event):
 					return
+				plane = Plane(click_coords[0], first_click_normal)
 				state = State.DEFINING_SURFACE
 
 			State.DEFINING_SURFACE:
@@ -150,34 +172,29 @@ class VolumeCreationTool:
 				)
 				if picked_point == null:
 					return
-				second_click_coord = Vector3i(picked_point.round())
-				var aabb = AABB(first_click_coord, Vector3.ZERO)
-				aabb = aabb.expand(second_click_coord)
+				click_coords[1] = picked_point
 				editor.gizmo_plugin.debug_point = picked_point
-				editor.gizmo_plugin.draw_volume(editor.voxel, aabb)
+				editor.gizmo_plugin.draw_volume(editor.voxel, aabb())
 				if Event.LeftRelease(event):
 					state = State.DEFINIG_VOLUME
 			State.DEFINIG_VOLUME:
-				var start = Time.get_ticks_usec()
 				var approach = Math.line_intersection(
-					second_click_coord,
+					click_coords[1],
 					first_click_normal,
 					camera.project_ray_origin(event.position),
 					camera.project_ray_normal(event.position)
 				)
-				var aabb = AABB(first_click_coord, Vector3.ZERO)
-				aabb = aabb.expand(second_click_coord)
-				aabb = aabb.expand(approach.round())
-				editor.gizmo_plugin.draw_volume(editor.voxel, aabb)
+				click_coords[2] = approach
+				editor.gizmo_plugin.draw_volume(editor.voxel, aabb())
 				editor.gizmo_plugin.debug_point = approach
 				if Event.LeftRelease(event):
 					editor.do_paint_volume_action(
-						editor.voxel, aabb, VoxelNode.CUBE, editor.palette.color
+						editor.voxel, aabb(), VoxelNode.CUBE, editor.palette.color
 					)
-					state = State.LURK
+					return QUIT
 				elif Event.RightRelease(event):
 					editor.do_paint_volume_action(editor.voxel, aabb, 0, editor.palette.color)
-					state = State.LURK
+					return QUIT
 
 
 func _forward_3d_gui_input(camera: Camera3D, event: InputEvent) -> int:
@@ -221,31 +238,26 @@ class PaintTool:
 					print("paint")
 
 		if event is InputEventMouse:
-			var ray_origin = camera.project_ray_origin(event.position)
-			var ray_end = ray_origin + camera.project_ray_normal(event.position) * camera.far
-			var query = PhysicsRayQueryParameters3D.create(ray_origin, ray_end)
-			query.collide_with_areas = true
-			var result = camera.get_world_3d().direct_space_state.intersect_ray(query)
-
-			if not result:
+			var pick = __inresect_pick_ray(camera, event)
+			if not pick.result:
 				return PASS_EVENT
 
-			var cell_node = result.collider.get_parent_node_3d()
+			var cell_node = pick.result.collider.get_parent_node_3d()
 			var voxel_node = cell_node.get_parent_node_3d()
 
 			if not voxel_node is VoxelNode:
 				return PASS_EVENT
 
 			var global_to_map_coord = voxel_node.global_transform.affine_inverse()
-			var local_normal = (global_to_map_coord.basis * result.normal).normalized()
+			var local_normal = (global_to_map_coord.basis * pick.result.normal).normalized()
 
 			var map_position = Vector3i(cell_node.position)
 			var snapping = Math.snap_one_sub_element(
-				global_to_map_coord * result.position - cell_node.position
+				global_to_map_coord * pick.result.position - cell_node.position
 			)
 
 			last_map_position = map_position
-			editor.gizmo_plugin.highlight(voxel_node, map_position, result.normal, snapping)
+			editor.gizmo_plugin.highlight(voxel_node, map_position, pick.result.normal, snapping)
 
 			if not event is InputEventMouseButton:
 				return PASS_EVENT
@@ -289,7 +301,9 @@ class PaintTool:
 							# snapping is ↘ or ↖ depending on which cell was picked.
 							# We have to figure out which side has been picked.
 							var snapping_ortho: Vector3i = t - u
-							var local_pick_dir = global_to_map_coord.basis * (ray_end - ray_origin)
+							var local_pick_dir = (
+								global_to_map_coord.basis * (pick.end - pick.origin)
+							)
 							var pick_sign = int(signf(local_pick_dir.dot(Vector3(snapping_ortho))))
 
 							assert(pick_sign != 0., "edge should not be visible. please report.")
