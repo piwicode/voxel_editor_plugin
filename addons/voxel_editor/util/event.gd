@@ -10,7 +10,9 @@ static func LeftPress(event):
 
 static func LeftRelease(event):
 	return (
-		event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT and event.pressed
+		event is InputEventMouseButton
+		and event.button_index == MOUSE_BUTTON_LEFT
+		and not event.pressed
 	)
 
 

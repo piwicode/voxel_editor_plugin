@@ -100,11 +100,10 @@ static func coord_to_name(coord: Vector3i) -> String:
 
 
 func set_cell(coord: Vector3i, mesh_id: int, color: Color):
-	print("set cell ", coord, " to ", mesh_id, " with color ", color)
+#	print("set cell ", coord, " to ", mesh_id, " with color ", color)
 	assert(mesh_id == 0 or mesh_id in mesh_index_map, "Unknown mesh_id")
 	if coord in map:
 		var child = get_node(NodePath(coord_to_name(coord)))
-		print("remove child ", child)
 		remove_child(child)
 		child.queue_free()
 	if mesh_id == 0:

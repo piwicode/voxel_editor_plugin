@@ -24,6 +24,7 @@ func clear():
 	var previous_voxel = __current_voxel
 	__current_voxel = null
 	__current_drawable = null
+	debug_point = null
 	if previous_voxel:
 		previous_voxel.update_gizmos()
 

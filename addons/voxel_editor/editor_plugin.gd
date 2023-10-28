@@ -123,6 +123,9 @@ class VolumeCreationTool:
 	var state: State = State.LURK
 	var plane = Plane(Vector3.UP, -.49)
 
+	func _init():
+		print("VolumePaintTool")
+
 	func aabb() -> AABB:
 		var aabb = AABB(click_coords[0].round(), Vector3.ZERO)
 		for v in click_coords:
@@ -134,17 +137,16 @@ class VolumeCreationTool:
 		if event is InputEventKey:
 			if event.keycode == KEY_ESCAPE:
 				return QUIT
+	
 		elif event is InputEventMouse:
-			on_mouse_input(editor, camera, event)
-			if Event.LeftButton(event):
-				return CONSUME_EVENT
+			var r = on_mouse_input(editor, camera, event)
+			return r if r != null else PASS_EVENT
 		return PASS_EVENT
 
 	func on_mouse_input(editor: EditorPlugin, camera: Camera3D, event: InputEventMouse):
 		match state:
 			State.LURK:
 				var wpick = __inresect_pick_ray(camera, event)
-
 				if wpick.result:
 					first_click_normal = wpick.result.normal
 					click_coords[0] = wpick.result.position + wpick.result.normal * 0.01
@@ -158,12 +160,12 @@ class VolumeCreationTool:
 					first_click_normal = plane.normal
 					click_coords[0] = pick
 
+				plane = Plane(first_click_normal, click_coords[0])
 				editor.gizmo_plugin.debug_point = click_coords[0]
 				editor.gizmo_plugin.draw_volume(editor.voxel, aabb())
-				if not Event.LeftPress(event):
-					return
-				plane = Plane(click_coords[0], first_click_normal)
-				state = State.DEFINING_SURFACE
+				if Event.LeftPress(event):
+					state = State.DEFINING_SURFACE
+					return CONSUME_EVENT
 
 			State.DEFINING_SURFACE:
 				var picked_point = plane.intersects_ray(
@@ -176,7 +178,16 @@ class VolumeCreationTool:
 				editor.gizmo_plugin.debug_point = picked_point
 				editor.gizmo_plugin.draw_volume(editor.voxel, aabb())
 				if Event.LeftRelease(event):
+					# When the press and release happened on the same cell.
+					if click_coords[0].round() == click_coords[1].round():
+						editor.do_paint_volume_action(
+							editor.voxel, aabb(), VoxelNode.CUBE, editor.palette.color
+						)
+						print("I want to quit!")
+						return QUIT
 					state = State.DEFINIG_VOLUME
+					return CONSUME_EVENT
+
 			State.DEFINIG_VOLUME:
 				var approach = Math.line_intersection(
 					click_coords[1],
@@ -193,20 +204,49 @@ class VolumeCreationTool:
 					)
 					return QUIT
 				elif Event.RightRelease(event):
-					editor.do_paint_volume_action(editor.voxel, aabb, 0, editor.palette.color)
+					editor.do_paint_volume_action(editor.voxel, aabb(), 0, editor.palette.color)
 					return QUIT
 
+var last_mouse_event
 
 func _forward_3d_gui_input(camera: Camera3D, event: InputEvent) -> int:
 	if voxel == null:
 		return AFTER_GUI_INPUT_PASS
-	if event is InputEventKey:
-		if event.pressed and event.keycode == KEY_V and event.echo == false:
+	if event is InputEventMouse:
+		last_mouse_event = event
+	if event is InputEventKey and event.pressed and event.echo == false:
+		if event.keycode == KEY_V:
 			current_tool = VolumeCreationTool.new()
+			return EditorPlugin.AFTER_GUI_INPUT_STOP
+		if event.keycode == KEY_ESCAPE:
+			print("Tool quit")
+			current_tool = PaintTool.new()
+			gizmo_plugin.clear()
+			return EditorPlugin.AFTER_GUI_INPUT_STOP
+		if event.keycode == KEY_F:
+			var pick = Tool.__inresect_pick_ray(camera, last_mouse_event)
+			if pick.result != null:
+				print("Attempt to focuss on ", pick)
+				var last_voxel = voxel
+				var es : EditorSelection = get_editor_interface().get_selection()
+				es.clear()
+				es.add_node(pick.result.collider)
+				
+				var get_back_to_it = func ():
+					print("Getting back to it")
+					es.clear()
+					es.add_node(last_voxel)
+					return EditorPlugin.AFTER_GUI_INPUT_STOP
+				# Wait a few moments before switching back to editing the voxel.
+				var t = camera.get_tree().create_timer(.05)
+				t.timeout.connect(get_back_to_it)
+				# Let the F key be interpreted by godot editor.
+				return EditorPlugin.AFTER_GUI_INPUT_PASS
+
 	var r = current_tool.on_input(self, camera, event)
-	if r == VolumeCreationTool.QUIT:
+	if r == Tool.QUIT:
 		print("Tool quit")
-		voxel.clear_gizmos()
+		gizmo_plugin.clear()
 		current_tool = PaintTool.new()
 		return EditorPlugin.AFTER_GUI_INPUT_STOP
 	elif r == VolumeCreationTool.CONSUME_EVENT:
@@ -352,7 +392,6 @@ class PaintTool:
 								return CONSUME_EVENT
 
 			elif event.button_index == 2:
-				print("bt2")
 				match Math.enumerate_units(snapping):
 					[]:  # Inner face => Delete the cell.
 						editor.do_paint_cell_action(
