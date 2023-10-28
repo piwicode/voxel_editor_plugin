@@ -1,8 +1,11 @@
 @tool
 class_name Math
 
+
 # Borrowed from https://math.stackexchange.com/questions/1993953/closest-points-between-two-lines
-static func line_intersection(line_position:Vector3, line_normal:Vector3, ray_position:Vector3, ray_normal:Vector3) -> Vector3:
+static func line_intersection(
+	line_position: Vector3, line_normal: Vector3, ray_position: Vector3, ray_normal: Vector3
+) -> Vector3:
 	var pos_diff = line_position - ray_position
 	var cross_normal = line_normal.cross(ray_normal).normalized()
 	var rejection = pos_diff - pos_diff.project(ray_normal) - pos_diff.project(cross_normal)
@@ -34,7 +37,5 @@ static func enumerate_units(v: Vector3i) -> Array:
 
 
 static func mesh_id_bit(v: Vector3i):
-	assert(v.x == 1 or v.x == -1)
-	assert(v.y == 1 or v.y == -1)
-	assert(v.z == 1 or v.z == -1)
+	assert(v.abs() == Vector3i.ONE)
 	return 1 << ((v.x + 1) / 2 + (v.y + 1) / 2 * 2 + (v.z + 1) / 2 * 4)

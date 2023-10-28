@@ -105,30 +105,6 @@ class Tool:
 class VolumeCreationTool:
 	extends Tool
 
-	static func LeftPress(event):
-		return (
-			event is InputEventMouseButton
-			and event.button_index == MOUSE_BUTTON_LEFT
-			and event.pressed
-		)
-
-	static func LeftRelease(event):
-		return (
-			event is InputEventMouseButton
-			and event.button_index == MOUSE_BUTTON_LEFT
-			and event.pressed
-		)
-
-	static func RightRelease(event):
-		return (
-			event is InputEventMouseButton
-			and event.button_index == MOUSE_BUTTON_RIGHT
-			and event.pressed
-		)
-
-	static func LeftButton(event):
-		return event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT
-
 	enum State { LURK, DEFINING_SURFACE, DEFINIG_VOLUME }
 
 	var first_click_normal: Vector3i
@@ -143,7 +119,7 @@ class VolumeCreationTool:
 				return QUIT
 		elif event is InputEventMouse:
 			on_mouse_input(editor, camera, event)
-			if LeftButton(event):
+			if Event.LeftButton(event):
 				return CONSUME_EVENT
 		return PASS_EVENT
 
@@ -163,7 +139,7 @@ class VolumeCreationTool:
 
 				editor.gizmo_plugin.debug_point = picked_point
 				editor.gizmo_plugin.draw_volume(editor.voxel, aabb)
-				if not LeftPress(event):
+				if not Event.LeftPress(event):
 					return
 				state = State.DEFINING_SURFACE
 
@@ -179,7 +155,7 @@ class VolumeCreationTool:
 				aabb = aabb.expand(second_click_coord)
 				editor.gizmo_plugin.debug_point = picked_point
 				editor.gizmo_plugin.draw_volume(editor.voxel, aabb)
-				if LeftRelease(event):
+				if Event.LeftRelease(event):
 					state = State.DEFINIG_VOLUME
 			State.DEFINIG_VOLUME:
 				var start = Time.get_ticks_usec()
@@ -194,12 +170,12 @@ class VolumeCreationTool:
 				aabb = aabb.expand(approach.round())
 				editor.gizmo_plugin.draw_volume(editor.voxel, aabb)
 				editor.gizmo_plugin.debug_point = approach
-				if LeftRelease(event):
+				if Event.LeftRelease(event):
 					editor.do_paint_volume_action(
 						editor.voxel, aabb, VoxelNode.CUBE, editor.palette.color
 					)
 					state = State.LURK
-				elif RightRelease(event):
+				elif Event.RightRelease(event):
 					editor.do_paint_volume_action(editor.voxel, aabb, 0, editor.palette.color)
 					state = State.LURK
 
