@@ -1,7 +1,7 @@
 class_name GizmoPlugin
 extends EditorNode3DGizmoPlugin
 
-const SelectMaterial = preload("select.tres")
+const SelectMaterial = preload("face_select.tres")
 
 var debug_point = null
 var __current_drawable = null
@@ -13,7 +13,7 @@ func _get_gizmo_name():
 
 
 func _init():
-	add_material("main", preload("material.tres"))
+	add_material("main", preload("highlight.tres"))
 
 
 func _has_gizmo(node):
