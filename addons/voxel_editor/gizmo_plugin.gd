@@ -1,8 +1,6 @@
 class_name GizmoPlugin
 extends EditorNode3DGizmoPlugin
 
-const SelectMaterial = preload("face_select.tres")
-
 var debug_point = null
 var __current_drawable = null
 var __current_voxel = null
@@ -10,10 +8,6 @@ var __current_voxel = null
 
 func _get_gizmo_name():
 	return "Voxel Editor"
-
-
-func _init():
-	add_material("main", preload("highlight.tres"))
 
 
 func _has_gizmo(node):
@@ -62,8 +56,8 @@ class Drawable:
 
 
 var highlight_box: BoxMesh = BoxMesh.new()
-const highlight_edge_material = preload("material.tres")
-const highlight_face_material = preload("select.tres")
+const highlight_edge_material = preload("res://addons/voxel_editor/material/highlight.tres")
+const highlight_face_material = preload("res://addons/voxel_editor/material/face_select.tres")
 
 
 class Highlight:
@@ -91,8 +85,8 @@ class Highlight:
 			var transform = Transform3D()
 			transform.origin = Vector3(coord)
 			transform.basis = instanciation_data.basis
-			SelectMaterial.set_shader_parameter("pick_normal", normal)
-			gizmo.add_mesh(instanciation_data.mesh, SelectMaterial, transform)
+			highlight_face_material.set_shader_parameter("pick_normal", normal)
+			gizmo.add_mesh(instanciation_data.mesh, highlight_face_material, transform)
 
 
 func highlight(voxel: VoxelNode, coord: Vector3i, normal: Vector3, snapping: Vector3i):

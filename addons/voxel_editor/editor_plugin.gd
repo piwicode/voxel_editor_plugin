@@ -255,6 +255,7 @@ func _forward_3d_gui_input(camera: Camera3D, event: InputEvent) -> int:
 		return EditorPlugin.AFTER_GUI_INPUT_PASS
 
 
+
 class PaintTool:
 	extends Tool
 	var last_map_position = null
