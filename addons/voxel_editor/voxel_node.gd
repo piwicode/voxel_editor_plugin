@@ -19,43 +19,7 @@ var mesh_index_map: Dictionary = build_mesh_index_map()
 # Stores StandardMaterial3D indexed by Color.
 var material_map: Dictionary
 
-const BOX_AXIS_VALUES = [-0.5, 0.5]
 const MESH_ID_SEEDS = [0x17, 0x5f, 0x7f, 0xff]
-const ORTHO_BASES = [
-	Basis(Vector3(1, 0, 0), Vector3(0, 1, 0), Vector3(0, 0, 1)),
-	Basis(Vector3(0, -1, 0), Vector3(1, 0, 0), Vector3(0, 0, 1)),
-	Basis(Vector3(-1, 0, 0), Vector3(0, -1, 0), Vector3(0, 0, 1)),
-	Basis(Vector3(0, 1, 0), Vector3(-1, 0, 0), Vector3(0, 0, 1)),
-	Basis(Vector3(1, 0, 0), Vector3(0, 0, -1), Vector3(0, 1, 0)),
-	Basis(Vector3(0, 0, 1), Vector3(1, 0, 0), Vector3(0, 1, 0)),
-	Basis(Vector3(-1, 0, 0), Vector3(0, 0, 1), Vector3(0, 1, 0)),
-	Basis(Vector3(0, 0, -1), Vector3(-1, 0, 0), Vector3(0, 1, 0)),
-	Basis(Vector3(1, 0, 0), Vector3(0, -1, 0), Vector3(0, 0, -1)),
-	Basis(Vector3(0, 1, 0), Vector3(1, 0, 0), Vector3(0, 0, -1)),
-	Basis(Vector3(-1, 0, 0), Vector3(0, 1, 0), Vector3(0, 0, -1)),
-	Basis(Vector3(0, -1, 0), Vector3(-1, 0, 0), Vector3(0, 0, -1)),
-	Basis(Vector3(1, 0, 0), Vector3(0, 0, 1), Vector3(0, -1, 0)),
-	Basis(Vector3(0, 0, -1), Vector3(1, 0, 0), Vector3(0, -1, 0)),
-	Basis(Vector3(-1, 0, 0), Vector3(0, 0, -1), Vector3(0, -1, 0)),
-	Basis(Vector3(0, 0, 1), Vector3(-1, 0, 0), Vector3(0, -1, 0)),
-	Basis(Vector3(0, 0, 1), Vector3(0, 1, 0), Vector3(-1, 0, 0)),
-	Basis(Vector3(0, -1, 0), Vector3(0, 0, 1), Vector3(-1, 0, 0)),
-	Basis(Vector3(0, 0, -1), Vector3(0, -1, 0), Vector3(-1, 0, 0)),
-	Basis(Vector3(0, 1, 0), Vector3(0, 0, -1), Vector3(-1, 0, 0)),
-	Basis(Vector3(0, 0, 1), Vector3(0, -1, 0), Vector3(1, 0, 0)),
-	Basis(Vector3(0, 1, 0), Vector3(0, 0, 1), Vector3(1, 0, 0)),
-	Basis(Vector3(0, 0, -1), Vector3(0, 1, 0), Vector3(1, 0, 0)),
-	Basis(Vector3(0, -1, 0), Vector3(0, 0, -1), Vector3(1, 0, 0))
-]
-
-const FaceShift = {
-	Vector3i(1, 0, 0): 1,
-	Vector3i(0, 1, 0): 2,
-	Vector3i(0, 0, 1): 4,
-	Vector3i(-1, 0, 0): -1,
-	Vector3i(0, -1, 0): -2,
-	Vector3i(0, 0, -1): -4
-}
 
 
 func get_material_for(color: Color) -> StandardMaterial3D:
@@ -66,19 +30,6 @@ func get_material_for(color: Color) -> StandardMaterial3D:
 	return material_map[color]
 
 
-static func transform_id(mesh_id: int, basis: Basis) -> int:
-	var result = 0
-	var p2 = Vector3(1, 2, 4)  # Powers of two.
-	for z in BOX_AXIS_VALUES:
-		for y in BOX_AXIS_VALUES:
-			for x in BOX_AXIS_VALUES:
-				var v = basis * Vector3(x, y, z) + Vector3(.5, .5, .5)
-				var write_bit = int(v.dot(p2))
-				result |= (mesh_id & 1) << write_bit
-				mesh_id >>= 1
-	return result
-
-
 static func build_mesh_index_map() -> Dictionary:
 	var start_time = Time.get_ticks_msec()
 	var mapping = {}
@@ -86,8 +37,8 @@ static func build_mesh_index_map() -> Dictionary:
 	for mesh_id in MESH_ID_SEEDS:
 		var scene = load("res://addons/voxel_editor/res/mesh_%d.tscn" % mesh_id)
 		var mesh = load("res://addons/voxel_editor/res/mesh_%d.res" % mesh_id)
-		for basis in ORTHO_BASES:
-			var rotated_mesh_id = transform_id(mesh_id, basis)
+		for basis in Math.ORTHO_BASES:
+			var rotated_mesh_id = Math.transform_id(mesh_id, basis)
 			if not rotated_mesh_id in mapping:
 				mapping[rotated_mesh_id] = {scene = scene, mesh = mesh, basis = basis}
 
@@ -176,9 +127,9 @@ class Face:
 static func __make_face(mask: int, id: int, vertices: int, normal: Vector3, outer: bool) -> Face:
 	var vertex_array = PackedVector3Array()
 	var bits = vertices
-	for z in BOX_AXIS_VALUES:
-		for y in BOX_AXIS_VALUES:
-			for x in BOX_AXIS_VALUES:
+	for z in Math.BOX_AXIS_VALUES:
+		for y in Math.BOX_AXIS_VALUES:
+			for x in Math.BOX_AXIS_VALUES:
 				if bits & 1:
 					vertex_array.append(Vector3(x, y, z))
 				bits >>= 1
@@ -199,8 +150,8 @@ static func __make_face(mask: int, id: int, vertices: int, normal: Vector3, oute
 	face.vertices = vertex_array
 	face.normal = normal.normalized()
 	face.neighbour = n_i if outer else Vector3i.ZERO
-	face.neighbour_mask = id << max(0, FaceShift[-n_i]) >> max(0, -FaceShift[-n_i]) if outer else 0
-	face.neighbour_value = id << max(0, FaceShift[-n_i]) >> max(0, -FaceShift[-n_i]) if outer else 0
+	face.neighbour_mask = Math.shift_face(id, -n_i) if outer else 0
+	face.neighbour_value = Math.shift_face(id, -n_i) if outer else 0
 	return face
 
 
@@ -216,28 +167,30 @@ static func __build_faces_by_mesh_id() -> Dictionary:
 
 	var face_by_id = {}
 	for seed in face_seeds:
-		for basis in ORTHO_BASES:
-			var id = transform_id(seed.id, basis)
+		for basis in Math.ORTHO_BASES:
+			var id = Math.transform_id(seed.id, basis)
 			if id in face_by_id:
 				continue
 			var face: Face = Face.new()
 
-			face.mask = transform_id(seed.mask, basis)
+			face.mask = Math.transform_id(seed.mask, basis)
 			face.id = id
 			# TODO: use the basis once Basis implement * operator for PackedVector3Array
 			face.vertices = Transform3D(basis, Vector3.ZERO) * seed.vertices
 			face.normal = basis * seed.normal
 			face.neighbour = Vector3i(basis * seed.normal) if seed.neighbour else Vector3i.ZERO
-			face.neighbour_mask = transform_id(seed.neighbour_mask, basis) if seed.neighbour else 0
+			face.neighbour_mask = (
+				Math.transform_id(seed.neighbour_mask, basis) if seed.neighbour else 0
+			)
 			face.neighbour_value = (
-				transform_id(seed.neighbour_value, basis) if seed.neighbour else 0
+				Math.transform_id(seed.neighbour_value, basis) if seed.neighbour else 0
 			)
 			face_by_id[id] = face
 
 	var faces_by_mesh_id: Dictionary = {}
 	for mesh_id_seeds in MESH_ID_SEEDS:
-		for basis in ORTHO_BASES:
-			var mesh_id: int = transform_id(mesh_id_seeds, basis)
+		for basis in Math.ORTHO_BASES:
+			var mesh_id: int = Math.transform_id(mesh_id_seeds, basis)
 			if mesh_id in faces_by_mesh_id:
 				continue
 			var faces: Array[Face] = []

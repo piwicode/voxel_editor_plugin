@@ -8,25 +8,10 @@ var gizmo_plugin: GizmoPlugin
 var palette: Control
 
 var voxel: VoxelNode = null
-var current_tool: Tool = PaintTool.new()
-
-const FaceMask = {
-	Vector3i(1, 0, 0): 0xAA,
-	Vector3i(0, 1, 0): 0xCC,
-	Vector3i(0, 0, 1): 0xF0,
-	Vector3i(-1, 0, 0): 0x55,
-	Vector3i(0, -1, 0): 0x33,
-	Vector3i(0, 0, -1): 0x0F
-}
-
-const FaceShift = {
-	Vector3i(1, 0, 0): 1,
-	Vector3i(0, 1, 0): 2,
-	Vector3i(0, 0, 1): 4,
-	Vector3i(-1, 0, 0): -1,
-	Vector3i(0, -1, 0): -2,
-	Vector3i(0, 0, -1): -4
-}
+var current_tool: Tool = PaintTool.new() :
+	set(value):
+		current_tool = value
+		print("Start: ", value.name())
 
 
 func _on_export_requested():
@@ -100,6 +85,7 @@ func do_paint_volume_action(voxel_node, aabb: AABB, mesh_id: int, color: Color):
 
 class Tool:
 	enum { PASS_EVENT, CONSUME_EVENT, QUIT }
+	enum { FACES = 1, EDGES = 2 , VERTICES = 3 }
 
 	static func __inresect_pick_ray(camera: Camera3D, event: InputEventMouse) -> Dictionary:
 		var origin = camera.project_ray_origin(event.position)
@@ -113,6 +99,117 @@ class Tool:
 		}
 
 
+	## Transforms intra-cell coordinates ([-.5, .5]³) into a snapped vector
+	## ({-1, 0, 1}³) pointing at the clicked primitive.
+	## The number of non null component depend on the typf of primitive:
+	## 0 is an inner face, 1 is a cube face, 2 is a cube edge, 3 is a cube corner.
+	static func __snap_one_sub_element(cell_local_pick: Vector3, 
+			local_normal: Vector3,
+			primitive_mask: int) -> Vector3i:
+		if primitive_mask == FACES:
+			# Assuming normal components are {√½, √⅓, 1}
+			# Multiply by a factor so that inner face return Vector.ZERO
+			return (local_normal * .7).round()
+		assert(primitive_mask==7)
+		const snap_size = .2
+		# Assuming a pick on a cell from with coordinates from [-.5,.5]
+		return Vector3i(cell_local_pick * 2 * (1.0 + snap_size))
+
+
+	static func __try_pick_with_highlight(editor: EditorPlugin, camera: Camera3D, event: InputEvent, primitive_mask: int) -> Variant:
+		var pick = __inresect_pick_ray(camera, event)
+		if not pick.result:
+			return null
+
+		var cell_node = pick.result.collider.get_parent_node_3d()
+		pick.voxel_node = cell_node.get_parent_node_3d()
+
+		if not pick.voxel_node is VoxelNode:
+			return null
+
+		var global_to_map_coord = pick.voxel_node.global_transform.affine_inverse()
+		pick.local_normal = (global_to_map_coord.basis * pick.result.normal).normalized()
+		pick.coord = Vector3i(cell_node.position.round())
+
+		pick.snapping = __snap_one_sub_element(
+				global_to_map_coord * pick.result.position - cell_node.position,
+				pick.local_normal,
+				primitive_mask
+			)
+		var coords : Array[Vector3i] = [pick.coord]
+		editor.gizmo_plugin.highlight(pick.voxel_node, coords, pick.result.normal, pick.snapping)
+		return pick
+
+	func name() -> String:
+		return "Abstract tool"
+
+	func on_input(editor: VoxelEditor, camera: Camera3D, event: InputEvent) -> int:
+		return PASS_EVENT
+
+
+class FaceGraph:
+	extends Graphs.CellGraph
+	var voxel: VoxelNode
+	var neighbour_directions: Array[Vector3i] = []
+	var normal: Vector3i
+	func _init(voxel: VoxelNode, normal:Vector3i):
+		self.neighbour_directions = [
+			Vector3i(normal.y, normal.z, normal.x),
+			Vector3i(normal.z, normal.x, normal.y),
+			-Vector3i(normal.y, normal.z, normal.x),
+			-Vector3i(normal.z, normal.x, normal.y)]
+		self.voxel = voxel
+		self.normal = normal
+
+	func adjacent(v : Vector3i, neighbours: PackedVector3Array):
+		var v_id : int = voxel.get_cell(v)
+		for dir in neighbour_directions:
+			# Get ne neighbour coordinate.
+			var neighbour: Vector3i = v + dir
+			var n_id : int = voxel.get_cell(neighbour)
+			# Is the neighbour connected by an edge?
+			var mask : int = Math.ID_MASK[normal + dir]
+			if Math.shift_face(n_id, dir) & v_id & mask != mask:
+				continue # No interface with adjacent cell.
+			# Is the neighbour has a non null surface?
+			if n_id & mask == 0:
+				continue
+			# Is the edge covered by an occluder?
+			# Get the cell on top of the candidate if any.
+			var occluder: Vector3i = neighbour + normal
+			var o_id: int = voxel.get_cell(occluder)
+			mask = Math.ID_MASK[-normal - dir]
+			if o_id & mask == mask:
+				continue # Edge covered by an occluder.
+			neighbours.append(neighbour)
+
+
+class FaceTool:
+	extends Tool
+	enum { LURK, PUSH_PULL }
+	var state = LURK
+	var face # List of cells
+	func name() -> String:
+		return "Face tool"
+
+	func on_input(editor: VoxelEditor, camera: Camera3D, event: InputEvent):
+		if not event is InputEventMouse:
+			return
+		match state:
+			LURK:
+				var pick = __try_pick_with_highlight(editor, camera, event, FACES)
+				if Event.LeftButton(event) and pick.result:
+					state = PUSH_PULL
+					var g = FaceGraph.new(editor.voxel, pick.snapping)
+					var coords : Array = Graphs.DFS(g, pick.coord)
+					editor.gizmo_plugin.highlight(editor.voxel, coords, pick.result.normal, pick.snapping)
+					# Compute the exposed mask for each cells.
+					return CONSUME_EVENT
+			PUSH_PULL:
+				if Event.LeftRelease(event):
+					return QUIT
+		return CONSUME_EVENT
+
 class VolumeCreationTool:
 	extends Tool
 
@@ -123,24 +220,25 @@ class VolumeCreationTool:
 	var state: State = State.LURK
 	var plane = Plane(Vector3.UP, -.49)
 
-	func _init():
-		print("VolumePaintTool")
+	func name() -> String:
+		return "Volume tool"
 
-	func aabb() -> AABB:
+	func __aabb() -> AABB:
 		var aabb = AABB(click_coords[0].round(), Vector3.ZERO)
 		for v in click_coords:
 			if v != null:
 				aabb = aabb.expand(v.round())
 		return aabb
 
-	func on_input(editor: EditorPlugin, camera: Camera3D, event: InputEvent) -> int:
+	func on_input(editor: VoxelEditor, camera: Camera3D, event: InputEvent) -> int:
 		if event is InputEventKey:
 			if event.keycode == KEY_ESCAPE:
 				return QUIT
-	
 		elif event is InputEventMouse:
 			var r = on_mouse_input(editor, camera, event)
-			return r if r != null else PASS_EVENT
+			if r != null:
+				return r
+			return CONSUME_EVENT if event is InputEventMouseButton and event.button == 1 else PASS_EVENT
 		return PASS_EVENT
 
 	func on_mouse_input(editor: EditorPlugin, camera: Camera3D, event: InputEventMouse):
@@ -162,7 +260,7 @@ class VolumeCreationTool:
 
 				plane = Plane(first_click_normal, click_coords[0])
 				editor.gizmo_plugin.debug_point = click_coords[0]
-				editor.gizmo_plugin.draw_volume(editor.voxel, aabb())
+				editor.gizmo_plugin.draw_volume(editor.voxel, __aabb())
 				if Event.LeftPress(event):
 					state = State.DEFINING_SURFACE
 					return CONSUME_EVENT
@@ -176,12 +274,12 @@ class VolumeCreationTool:
 					return
 				click_coords[1] = picked_point
 				editor.gizmo_plugin.debug_point = picked_point
-				editor.gizmo_plugin.draw_volume(editor.voxel, aabb())
+				editor.gizmo_plugin.draw_volume(editor.voxel, __aabb())
 				if Event.LeftRelease(event):
 					# When the press and release happened on the same cell.
 					if click_coords[0].round() == click_coords[1].round():
 						editor.do_paint_volume_action(
-							editor.voxel, aabb(), VoxelNode.CUBE, editor.palette.color
+							editor.voxel, __aabb(), VoxelNode.CUBE, editor.palette.color
 						)
 						print("I want to quit!")
 						return QUIT
@@ -196,15 +294,15 @@ class VolumeCreationTool:
 					camera.project_ray_normal(event.position)
 				)
 				click_coords[2] = approach
-				editor.gizmo_plugin.draw_volume(editor.voxel, aabb())
+				editor.gizmo_plugin.draw_volume(editor.voxel, __aabb())
 				editor.gizmo_plugin.debug_point = approach
 				if Event.LeftRelease(event):
 					editor.do_paint_volume_action(
-						editor.voxel, aabb(), VoxelNode.CUBE, editor.palette.color
+						editor.voxel, __aabb(), VoxelNode.CUBE, editor.palette.color
 					)
 					return QUIT
 				elif Event.RightRelease(event):
-					editor.do_paint_volume_action(editor.voxel, aabb(), 0, editor.palette.color)
+					editor.do_paint_volume_action(editor.voxel, __aabb(), 0, editor.palette.color)
 					return QUIT
 
 var last_mouse_event
@@ -215,34 +313,39 @@ func _forward_3d_gui_input(camera: Camera3D, event: InputEvent) -> int:
 	if event is InputEventMouse:
 		last_mouse_event = event
 	if event is InputEventKey and event.pressed and event.echo == false:
-		if event.keycode == KEY_V:
-			current_tool = VolumeCreationTool.new()
-			return EditorPlugin.AFTER_GUI_INPUT_STOP
-		if event.keycode == KEY_ESCAPE:
-			print("Tool quit")
-			current_tool = PaintTool.new()
-			gizmo_plugin.clear()
-			return EditorPlugin.AFTER_GUI_INPUT_STOP
-		if event.keycode == KEY_F:
-			var pick = Tool.__inresect_pick_ray(camera, last_mouse_event)
-			if pick.result != null:
-				print("Attempt to focuss on ", pick)
-				var last_voxel = voxel
-				var es : EditorSelection = get_editor_interface().get_selection()
-				es.clear()
-				es.add_node(pick.result.collider)
-				
-				var get_back_to_it = func ():
-					print("Getting back to it")
+		match event.keycode:
+			KEY_V:
+				current_tool = VolumeCreationTool.new()
+				return EditorPlugin.AFTER_GUI_INPUT_STOP
+			KEY_ESCAPE:
+				print("Tool quit")
+				current_tool = PaintTool.new()
+				gizmo_plugin.clear()
+				return EditorPlugin.AFTER_GUI_INPUT_STOP
+			KEY_F:
+				var pick = Tool.__inresect_pick_ray(camera, last_mouse_event)
+				if pick.result != null:
+					print("Attempt to focuss on ", pick)
+					var last_voxel = voxel
+					var es : EditorSelection = get_editor_interface().get_selection()
 					es.clear()
-					es.add_node(last_voxel)
-					return EditorPlugin.AFTER_GUI_INPUT_STOP
-				# Wait a few moments before switching back to editing the voxel.
-				var t = camera.get_tree().create_timer(.05)
-				t.timeout.connect(get_back_to_it)
-				# Let the F key be interpreted by godot editor.
-				return EditorPlugin.AFTER_GUI_INPUT_PASS
-
+					es.add_node(pick.result.collider)
+					
+					var get_back_to_it = func ():
+						print("Getting back to it")
+						es.clear()
+						es.add_node(last_voxel)
+						return EditorPlugin.AFTER_GUI_INPUT_STOP
+					# Wait a few moments before switching back to editing the voxel.
+					var t = camera.get_tree().create_timer(.05)
+					t.timeout.connect(get_back_to_it)
+					# Let the F key be interpreted by godot editor.
+					return EditorPlugin.AFTER_GUI_INPUT_PASS
+			KEY_C:
+				current_tool = FaceTool.new()
+				gizmo_plugin.clear()
+				return EditorPlugin.AFTER_GUI_INPUT_STOP
+				
 	var r = current_tool.on_input(self, camera, event)
 	if r == Tool.QUIT:
 		print("Tool quit")
@@ -260,6 +363,8 @@ class PaintTool:
 	extends Tool
 	var last_map_position = null
 
+	func name() -> String:
+		return "Paint tool"
 	func on_input(editor: VoxelEditor, camera: Camera3D, event: InputEvent) -> int:
 		if event is InputEventKey:
 			if event.pressed and event.keycode == KEY_E and event.echo == false:
@@ -293,12 +398,14 @@ class PaintTool:
 			var local_normal = (global_to_map_coord.basis * pick.result.normal).normalized()
 
 			var map_position = Vector3i(cell_node.position)
-			var snapping = Math.snap_one_sub_element(
-				global_to_map_coord * pick.result.position - cell_node.position
+			var snapping = __snap_one_sub_element(
+				global_to_map_coord * pick.result.position - cell_node.position,
+				local_normal,
+				7
 			)
 
 			last_map_position = map_position
-			editor.gizmo_plugin.highlight(voxel_node, map_position, pick.result.normal, snapping)
+			editor.gizmo_plugin.highlight(voxel_node, [map_position], pick.result.normal, snapping)
 
 			if not event is InputEventMouseButton:
 				return PASS_EVENT
@@ -319,11 +426,9 @@ class PaintTool:
 						var new_box_position = map_position + n
 						var new_mesh_id = voxel_node.get_cell(map_position)
 						print("current cell %x" % new_mesh_id)
-						new_mesh_id &= FaceMask[-n]
+						new_mesh_id &= Math.ID_MASK[-n]
 						print("masked cell %x" % new_mesh_id)
-						new_mesh_id |= (
-							new_mesh_id >> max(0, FaceShift[-n]) << max(0, -FaceShift[-n])
-						)
+						new_mesh_id |= Math.shift_face(new_mesh_id, n)
 						print("new cell %x" % new_mesh_id)
 						editor.do_paint_cell_action(
 							voxel_node, new_box_position, new_mesh_id, editor.palette.color
@@ -358,7 +463,7 @@ class PaintTool:
 								"cell should be empty. please report."
 							)
 							var new_mesh_id = (
-								FaceMask[-new_cell_rel_pos] | FaceMask[snapping - new_cell_rel_pos]
+								Math.ID_MASK[-new_cell_rel_pos] | Math.ID_MASK[snapping - new_cell_rel_pos]
 							)
 							editor.do_paint_cell_action(
 								voxel_node, new_cell_position, new_mesh_id, editor.palette.color
@@ -416,7 +521,7 @@ class PaintTool:
 							editor.do_paint_cell_action(
 								voxel_node,
 								map_position,
-								FaceMask[-t] | FaceMask[-u],
+								Math.ID_MASK[-t] | Math.ID_MASK[-u],
 								voxel_node.get_cell_color(map_position)
 							)
 						return CONSUME_EVENT
@@ -429,7 +534,7 @@ class PaintTool:
 							editor.do_paint_cell_action(
 								voxel_node,
 								map_position,
-								FaceMask[-t] | FaceMask[-u] | FaceMask[-v],
+								Math.ID_MASK[-t] | Math.ID_MASK[-u] | Math.ID_MASK[-v],
 								voxel_node.get_cell_color(map_position)
 							)
 			else:

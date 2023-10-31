@@ -29,10 +29,10 @@ func __draw(voxel_node: VoxelNode, drawable: Drawable):
 
 	if previous_voxel and previous_voxel != voxel_node:
 		previous_voxel.update_gizmos()
-
-	if __current_drawable != drawable:
-		__current_drawable = drawable
-		voxel_node.update_gizmos()
+	if __current_drawable and __current_drawable.equals(drawable):
+		return
+	__current_drawable = drawable
+	voxel_node.update_gizmos()
 
 
 func _redraw(gizmo: EditorNode3DGizmo):
@@ -41,6 +41,8 @@ func _redraw(gizmo: EditorNode3DGizmo):
 		return
 	if gizmo.get_node_3d() != __current_voxel:
 		return
+	# Figure out why there are two gizmo attached to the same node.
+#	print("Redraw gizmo",gizmo,gizmo.get_node_3d())
 	__current_drawable.draw(self, gizmo)
 	if debug_point:
 		var vertices = PackedVector3Array()
@@ -51,6 +53,9 @@ func _redraw(gizmo: EditorNode3DGizmo):
 
 
 class Drawable:
+	func equals(o: Drawable) -> bool:
+		return false
+
 	func draw(plugin: GizmoPlugin, gizmo: EditorNode3DGizmo):
 		pass
 
@@ -62,36 +67,40 @@ const highlight_face_material = preload("res://addons/voxel_editor/material/face
 
 class Highlight:
 	extends Drawable
-	var coord: Vector3i
+	var coords: Array
 	var normal: Vector3
 	var snapping: Vector3i
+
+	func equals(o: Drawable) -> bool:
+		return (
+			o is Highlight and o.coords == coords and o.normal == normal and o.snapping == snapping
+		)
 
 	func draw(plugin: GizmoPlugin, gizmo: EditorNode3DGizmo):
 		if snapping.length_squared() > 1:
 			# Highlight an edge or a point.
 			plugin.highlight_box.size = Vector3(1., 1., 1.) - 0.96 * Vector3(snapping).abs()
 			var tr = Transform3D()
-			tr.origin = Vector3(coord) + Vector3(snapping) * .5
-			gizmo.add_mesh(plugin.highlight_box, plugin.highlight_edge_material, tr)
+			for coord in coords:
+				tr.origin = Vector3(coord) + Vector3(snapping) * .5
+				gizmo.add_mesh(plugin.highlight_box, plugin.highlight_edge_material, tr)
 		else:
 			# Highlight a face.
 			var voxel = gizmo.get_node_3d()
-			var mesh_id = voxel.get_cell(coord)
-
-			if not mesh_id:
-				return  # TO BE REMOVED. It is there to ensure assert does not messup with godot
-			assert(mesh_id != 0)
-			var instanciation_data = voxel.mesh_index_map[mesh_id]
-			var transform = Transform3D()
-			transform.origin = Vector3(coord)
-			transform.basis = instanciation_data.basis
-			highlight_face_material.set_shader_parameter("pick_normal", normal)
-			gizmo.add_mesh(instanciation_data.mesh, highlight_face_material, transform)
+			for coord in coords:
+				var mesh_id = voxel.get_cell(coord)
+				assert(mesh_id != 0)
+				var instanciation_data = voxel.mesh_index_map[mesh_id]
+				var transform = Transform3D()
+				transform.origin = Vector3(coord)
+				transform.basis = instanciation_data.basis
+				highlight_face_material.set_shader_parameter("pick_normal", normal)
+				gizmo.add_mesh(instanciation_data.mesh, highlight_face_material, transform)
 
 
-func highlight(voxel: VoxelNode, coord: Vector3i, normal: Vector3, snapping: Vector3i):
+func highlight(voxel: VoxelNode, coords: Array, normal: Vector3, snapping: Vector3i):
 	var highlight = Highlight.new()
-	highlight.coord = coord
+	highlight.coords = coords
 	highlight.normal = normal
 	highlight.snapping = snapping
 	__draw(voxel, highlight)
@@ -100,6 +109,9 @@ func highlight(voxel: VoxelNode, coord: Vector3i, normal: Vector3, snapping: Vec
 class Volume:
 	extends Drawable
 	var aabb: AABB
+
+	func equals(o: Drawable) -> bool:
+		return o is Volume and o.aabb == aabb
 
 	func draw(plugin: GizmoPlugin, gizmo: EditorNode3DGizmo):
 		var vertices = PackedVector3Array()
