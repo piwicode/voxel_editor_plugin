@@ -7,7 +7,9 @@ const Palette = preload("side_panel.tscn")
 var gizmo_plugin: GizmoPlugin
 var palette: Control
 
+# Node boing edited, or null.
 var voxel: VoxelNode = null
+
 var current_tool: Tool = PaintTool.new() :
 	set(value):
 		current_tool = value
@@ -82,8 +84,9 @@ func do_paint_volume_action(voxel_node, aabb: AABB, mesh_id: int, color: Color):
 				)
 	undo_redo.commit_action()
 
-
 class Tool:
+
+
 	enum { PASS_EVENT, CONSUME_EVENT, QUIT }
 	enum { FACES = 1, EDGES = 2 , VERTICES = 3 }
 
@@ -129,10 +132,10 @@ class Tool:
 
 		var global_to_map_coord = pick.voxel.global_transform.affine_inverse()
 		pick.local_normal = (global_to_map_coord.basis * pick.result.normal).normalized()
+		pick.local_position = global_to_map_coord * pick.result.position
 		pick.coord = Vector3i(cell_node.position.round())
-
 		pick.snapping = __snap_one_sub_element(
-				global_to_map_coord * pick.result.position - cell_node.position,
+				pick.local_position - cell_node.position,
 				pick.local_normal,
 				primitive_mask
 			)
@@ -145,7 +148,6 @@ class Tool:
 
 	func on_input(editor: VoxelEditor, camera: Camera3D, event: InputEvent) -> int:
 		return PASS_EVENT
-
 
 class FaceGraph:
 	extends Graphs.CellGraph
@@ -188,43 +190,21 @@ class FaceGraph:
 				continue # Edge covered by an occluder.
 			neighbours.append(neighbour)
 
-class VoxelSnapshot:
-	var voxel: VoxelNode
-	var backup: Dictionary = {}
-	var edits: Dictionary = {}
-	func _init(voxel: VoxelNode):
-		self.voxel = voxel
-	func set_cell(coord: Vector3i, mesh_id: int, color: Color):
-		if not coord in backup:
-			backup[coord] = voxel.map.get(coord, VoxelNode.EMPTY_CELL)
-		edits[coord] = {mesh_id = mesh_id, color = color}
-	func rollback():
-		edits.clear()
-	func apply():
-		var stat_change : int = 0
-		for coord in edits:
-			var cell : Dictionary = edits[coord]
-			voxel.set_cell(coord, cell.mesh_id, cell.color)
-			stat_change += 1
-		for coord in backup.keys():
-			if not coord in edits:
-				var cell : Dictionary = backup[coord]
-				voxel.set_cell(coord, cell.mesh_id, cell.color)
-				backup.erase(coord)
-				stat_change += 1
-		print("Applied %d edit %d backup %d changes" % [edits.size(), backup.size(), stat_change])
-	
 class FaceTool:
 	extends Tool
 	enum { LURK, PUSH_PULL }
 	var state = LURK
-	var face # List of cells
+
+	# Parameters of the first pick, in voxel local coordinates.
 	var pick_position : Vector3
 	var pick_normal : Vector3i
 	var pick_color: Color
-	# Mesh_id by map coordinate corresponding to the slected face.
+	# Mesh_id by map coordinate corresponding to the selected face.
 	var face_desc : Dictionary
-	var voxel_snapshot : VoxelSnapshot
+
+	# Utility to apply changes to the voxel.
+	var voxel_snapshot : VoxelNode.Snapshot
+
 	func name() -> String:
 		return "Face tool"
 
@@ -235,8 +215,8 @@ class FaceTool:
 			LURK:
 				var pick = __try_pick_with_highlight(editor, camera, event, FACES)
 				if Event.LeftButton(event) and pick.result:
-					pick_position = pick.result.position
-					pick_normal = pick.snapping
+					pick_position = pick.local_position
+					pick_normal = pick.local_normal
 					pick_color = editor.voxel.get_cell_color(pick.coord)
 					# Compute the exposed mask for each cells.
 					var g = FaceGraph.new(editor.voxel, pick.snapping, pick_color)
@@ -247,16 +227,17 @@ class FaceTool:
 						mesh_id &= Math.ID_MASK[pick_normal]
 						mesh_id |= Math.shift_face(mesh_id, -pick_normal)
 						face_desc[coord] = mesh_id
-					voxel_snapshot = VoxelSnapshot.new(editor.voxel)
+					voxel_snapshot = VoxelNode.Snapshot.new(editor.voxel)
 					editor.gizmo_plugin.highlight(editor.voxel, coords, pick.result.normal, pick.snapping)
 					state = PUSH_PULL
 					return CONSUME_EVENT
 			PUSH_PULL:
+				var global_to_voxel = editor.voxel.global_transform.affine_inverse()
 				var approach = Math.line_intersection(
 					pick_position,
 					pick_normal,
-					camera.project_ray_origin(event.position),
-					camera.project_ray_normal(event.position)
+					global_to_voxel * camera.project_ray_origin(event.position),
+					global_to_voxel.basis * camera.project_ray_normal(event.position)
 				)
 				var thick : int = (approach - pick_position).dot(pick_normal)
 				voxel_snapshot.rollback()
@@ -267,12 +248,13 @@ class FaceTool:
 				elif thick < 0:
 					for level in range(0, thick , -1):
 						for coord in face_desc:
-							voxel_snapshot.set_cell(coord + pick_normal * int(level), 0, pick_color)
+							voxel_snapshot.clear_cell(coord + pick_normal * int(level))
 				voxel_snapshot.apply()
 				
 				if Event.LeftRelease(event):
 					return QUIT
 		return CONSUME_EVENT
+
 
 class VolumeCreationTool:
 	extends Tool
@@ -302,27 +284,28 @@ class VolumeCreationTool:
 			var r = on_mouse_input(editor, camera, event)
 			if r != null:
 				return r
-			return CONSUME_EVENT if event is InputEventMouseButton and event.button == 1 else PASS_EVENT
+			return CONSUME_EVENT if Event.LeftButton(event) else PASS_EVENT
 		return PASS_EVENT
 
 	func on_mouse_input(editor: EditorPlugin, camera: Camera3D, event: InputEventMouse):
+		var world_to_local = editor.voxel.global_transform.affine_inverse()
 		match state:
 			State.LURK:
-				var wpick = __inresect_pick_ray(camera, event)
-				if wpick.result:
-					first_click_normal = wpick.result.normal
-					click_coords[0] = wpick.result.position + wpick.result.normal * 0.01
-				else:
-					var pick = Plane(Vector3.UP, -.49).intersects_ray(
+				var wpick = __try_pick_with_highlight(editor, camera, event, FACES)
+				if wpick:
+					first_click_normal = wpick.local_normal
+					click_coords[0] = wpick.local_position + wpick.local_position * 0.01
+				else: # Fallback on plane pick.
+					var pick = (editor.voxel.global_transform * Plane(Vector3.UP, -.49)).intersects_ray(
 						camera.project_ray_origin(event.position),
 						camera.project_ray_normal(event.position)
 					)
 					if pick == null:
 						return
-					first_click_normal = plane.normal
-					click_coords[0] = pick
+					first_click_normal = world_to_local.basis * plane.normal
+					click_coords[0] = world_to_local * pick
 
-				plane = Plane(first_click_normal, click_coords[0])
+				plane = editor.voxel.global_transform * Plane(first_click_normal, click_coords[0])
 				editor.gizmo_plugin.debug_point = click_coords[0]
 				editor.gizmo_plugin.draw_volume(editor.voxel, __aabb())
 				if Event.LeftPress(event):
@@ -336,7 +319,7 @@ class VolumeCreationTool:
 				)
 				if picked_point == null:
 					return
-				click_coords[1] = picked_point
+				click_coords[1] = world_to_local * picked_point
 				editor.gizmo_plugin.debug_point = picked_point
 				editor.gizmo_plugin.draw_volume(editor.voxel, __aabb())
 				if Event.LeftRelease(event):
@@ -348,14 +331,14 @@ class VolumeCreationTool:
 						print("I want to quit!")
 						return QUIT
 					state = State.DEFINIG_VOLUME
-					return CONSUME_EVENT
+				return CONSUME_EVENT
 
 			State.DEFINIG_VOLUME:
 				var approach = Math.line_intersection(
 					click_coords[1],
 					first_click_normal,
-					camera.project_ray_origin(event.position),
-					camera.project_ray_normal(event.position)
+					world_to_local * camera.project_ray_origin(event.position),
+					world_to_local.basis * camera.project_ray_normal(event.position)
 				)
 				click_coords[2] = approach
 				editor.gizmo_plugin.draw_volume(editor.voxel, __aabb())

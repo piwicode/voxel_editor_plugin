@@ -1,8 +1,10 @@
 @tool
 extends Node3D
 class_name VoxelNode
-const EMPTY_CELL = {mesh_id = 0, color = Color(0, 0, 0)}
+
+# Mesh_id of a CUBE.
 const CUBE = 255
+
 # Describe the voxel completely.
 # Stores { mesh_id = int, color = Color } indexed by Vector3i coordinates.
 @export var map: Dictionary = {}
@@ -16,7 +18,7 @@ const CUBE = 255
 # matter. bits are in order packed x first then y, then z.
 var mesh_index_map: Dictionary = build_mesh_index_map()
 
-# Stores StandardMaterial3D indexed by Color.
+# Caches StandardMaterial3D indexed by Color.
 var material_map: Dictionary
 
 const MESH_ID_SEEDS = [0x17, 0x5f, 0x7f, 0xff]
@@ -284,6 +286,39 @@ func _enter_tree():
 	set_meta("_edit_group_", true)
 
 
-# Called every frame. 'delta' is the elapsed time since the previous frame.
-func _process(delta):
-	pass
+# Accumulates changes applied to a voxel with undo capabilities.
+class Snapshot:
+	const EMPTY_CELL = {mesh_id = 0, color = Color(0, 0, 0)}
+
+	var voxel: VoxelNode
+	var backup: Dictionary = {}
+	var edits: Dictionary = {}
+
+	func _init(voxel: VoxelNode):
+		self.voxel = voxel
+
+	func clear_cell(coord: Vector3i):
+		set_cell(coord, EMPTY_CELL.mesh_id, EMPTY_CELL.color)
+
+	func set_cell(coord: Vector3i, mesh_id: int, color: Color):
+		if not coord in backup:
+			backup[coord] = voxel.map.get(coord, EMPTY_CELL)
+		edits[coord] = {mesh_id = mesh_id, color = color}
+
+	# Clears all edits. Call apply to update the voxel.
+	func rollback():
+		edits.clear()
+
+	func apply():
+		var stat_change: int = 0
+		for coord in edits:
+			var cell: Dictionary = edits[coord]
+			voxel.set_cell(coord, cell.mesh_id, cell.color)
+			stat_change += 1
+		for coord in backup.keys():
+			if not coord in edits:
+				var cell: Dictionary = backup[coord]
+				voxel.set_cell(coord, cell.mesh_id, cell.color)
+				backup.erase(coord)
+				stat_change += 1
+		print("Applied %d edit %d backup %d changes" % [edits.size(), backup.size(), stat_change])
