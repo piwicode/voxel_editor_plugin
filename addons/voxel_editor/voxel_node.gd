@@ -62,6 +62,9 @@ func set_cell(coord: Vector3i, mesh_id: int, color: Color):
 		var child = get_node(NodePath(coord_to_name(coord)))
 		remove_child(child)
 		child.queue_free()
+	elif mesh_id == 0:
+		return
+	print("Update voxel tree")
 	if mesh_id == 0:
 		map.erase(coord)
 	else:

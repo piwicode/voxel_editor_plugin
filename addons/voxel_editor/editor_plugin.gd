@@ -84,9 +84,19 @@ func do_paint_volume_action(voxel_node, aabb: AABB, mesh_id: int, color: Color):
 				)
 	undo_redo.commit_action()
 
+func do_paint_snapshot_action(voxel: VoxelNode, snapshot: VoxelNode.Snapshot):
+	var undo_redo = get_undo_redo()
+	undo_redo.create_action("Add cell")
+	for v in snapshot.edits:
+		var e = snapshot.edits[v]
+		undo_redo.add_do_method(voxel, "set_cell", v, e.mesh_id, e.color)
+	for v in snapshot.backup:
+		var e = snapshot.backup[v]
+		undo_redo.add_undo_method(voxel, "set_cell", v, e.mesh_id, e.color)
+	undo_redo.commit_action()
+
+
 class Tool:
-
-
 	enum { PASS_EVENT, CONSUME_EVENT, QUIT }
 	enum { FACES = 1, EDGES = 2 , VERTICES = 3 }
 
@@ -252,6 +262,7 @@ class FaceTool:
 				voxel_snapshot.apply()
 				
 				if Event.LeftRelease(event):
+					editor.do_paint_snapshot_action(editor.voxel, voxel_snapshot)
 					return QUIT
 		return CONSUME_EVENT
 
@@ -412,6 +423,7 @@ class PaintTool:
 
 	func name() -> String:
 		return "Paint tool"
+
 	func on_input(editor: VoxelEditor, camera: Camera3D, event: InputEvent) -> int:
 		if event is InputEventKey:
 			if event.pressed and event.keycode == KEY_E and event.echo == false:
