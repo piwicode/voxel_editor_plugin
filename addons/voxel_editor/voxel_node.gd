@@ -1,7 +1,7 @@
 @tool
 extends Node3D
 class_name VoxelNode
-
+const EMPTY_CELL = {mesh_id = 0, color = Color(0, 0, 0)}
 const CUBE = 255
 # Describe the voxel completely.
 # Stores { mesh_id = int, color = Color } indexed by Vector3i coordinates.
@@ -54,6 +54,9 @@ func set_cell(coord: Vector3i, mesh_id: int, color: Color):
 #	print("set cell ", coord, " to ", mesh_id, " with color ", color)
 	assert(mesh_id == 0 or mesh_id in mesh_index_map, "Unknown mesh_id")
 	if coord in map:
+		var cell = map[coord]
+		if cell.mesh_id == mesh_id and cell.color == color:
+			return
 		var child = get_node(NodePath(coord_to_name(coord)))
 		remove_child(child)
 		child.queue_free()
@@ -64,7 +67,12 @@ func set_cell(coord: Vector3i, mesh_id: int, color: Color):
 		__instantiate_cell(coord, mesh_id, color)
 
 
-func get_cell(coord: Vector3i) -> int:
+func get_cell(coord: Vector3i):
+	if coord in map:
+		return map[coord].duplicate()
+
+
+func get_cell_id(coord: Vector3i) -> int:
 	if coord in map:
 		return map[coord].mesh_id
 	return 0
@@ -227,7 +235,10 @@ func export_mesh():
 		for face_v in faces_by_mesh_id[cell.mesh_id]:
 			var face: Face = face_v
 			if face.neighbour:
-				if get_cell(coord + face.neighbour) & face.neighbour_mask == face.neighbour_value:
+				if (
+					get_cell_id(coord + face.neighbour) & face.neighbour_mask
+					== face.neighbour_value
+				):
 					skipped += face.vertices.size()
 					continue  # If the neighbour covers that face.
 

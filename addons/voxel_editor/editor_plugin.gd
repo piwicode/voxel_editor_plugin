@@ -77,7 +77,7 @@ func do_paint_volume_action(voxel_node, aabb: AABB, mesh_id: int, color: Color):
 					voxel_node,
 					"set_cell",
 					map_position,
-					voxel_node.get_cell(map_position),
+					voxel_node.get_cell_id(map_position),
 					voxel_node.get_cell_color(map_position)
 				)
 	undo_redo.commit_action()
@@ -122,12 +122,12 @@ class Tool:
 			return null
 
 		var cell_node = pick.result.collider.get_parent_node_3d()
-		pick.voxel_node = cell_node.get_parent_node_3d()
+		pick.voxel = cell_node.get_parent_node_3d()
 
-		if not pick.voxel_node is VoxelNode:
+		if not pick.voxel is VoxelNode:
 			return null
 
-		var global_to_map_coord = pick.voxel_node.global_transform.affine_inverse()
+		var global_to_map_coord = pick.voxel.global_transform.affine_inverse()
 		pick.local_normal = (global_to_map_coord.basis * pick.result.normal).normalized()
 		pick.coord = Vector3i(cell_node.position.round())
 
@@ -137,7 +137,7 @@ class Tool:
 				primitive_mask
 			)
 		var coords : Array[Vector3i] = [pick.coord]
-		editor.gizmo_plugin.highlight(pick.voxel_node, coords, pick.result.normal, pick.snapping)
+		editor.gizmo_plugin.highlight(pick.voxel, coords, pick.result.normal, pick.snapping)
 		return pick
 
 	func name() -> String:
@@ -152,7 +152,8 @@ class FaceGraph:
 	var voxel: VoxelNode
 	var neighbour_directions: Array[Vector3i] = []
 	var normal: Vector3i
-	func _init(voxel: VoxelNode, normal:Vector3i):
+	var color: Color
+	func _init(voxel: VoxelNode, normal:Vector3i, color: Color):
 		self.neighbour_directions = [
 			Vector3i(normal.y, normal.z, normal.x),
 			Vector3i(normal.z, normal.x, normal.y),
@@ -160,13 +161,17 @@ class FaceGraph:
 			-Vector3i(normal.z, normal.x, normal.y)]
 		self.voxel = voxel
 		self.normal = normal
+		self.color = color
 
 	func adjacent(v : Vector3i, neighbours: PackedVector3Array):
-		var v_id : int = voxel.get_cell(v)
+		var v_id : int = voxel.get_cell_id(v)
 		for dir in neighbour_directions:
 			# Get ne neighbour coordinate.
 			var neighbour: Vector3i = v + dir
-			var n_id : int = voxel.get_cell(neighbour)
+			var n_id : int = voxel.get_cell_id(neighbour)
+			# Neighbour color is the expected one.
+			if not n_id or voxel.get_cell_color(neighbour) != color:
+				continue
 			# Is the neighbour connected by an edge?
 			var mask : int = Math.ID_MASK[normal + dir]
 			if Math.shift_face(n_id, dir) & v_id & mask != mask:
@@ -177,18 +182,49 @@ class FaceGraph:
 			# Is the edge covered by an occluder?
 			# Get the cell on top of the candidate if any.
 			var occluder: Vector3i = neighbour + normal
-			var o_id: int = voxel.get_cell(occluder)
+			var o_id: int = voxel.get_cell_id(occluder)
 			mask = Math.ID_MASK[-normal - dir]
 			if o_id & mask == mask:
 				continue # Edge covered by an occluder.
 			neighbours.append(neighbour)
 
-
+class VoxelSnapshot:
+	var voxel: VoxelNode
+	var backup: Dictionary = {}
+	var edits: Dictionary = {}
+	func _init(voxel: VoxelNode):
+		self.voxel = voxel
+	func set_cell(coord: Vector3i, mesh_id: int, color: Color):
+		if not coord in backup:
+			backup[coord] = voxel.map.get(coord, VoxelNode.EMPTY_CELL)
+		edits[coord] = {mesh_id = mesh_id, color = color}
+	func rollback():
+		edits.clear()
+	func apply():
+		var stat_change : int = 0
+		for coord in edits:
+			var cell : Dictionary = edits[coord]
+			voxel.set_cell(coord, cell.mesh_id, cell.color)
+			stat_change += 1
+		for coord in backup.keys():
+			if not coord in edits:
+				var cell : Dictionary = backup[coord]
+				voxel.set_cell(coord, cell.mesh_id, cell.color)
+				backup.erase(coord)
+				stat_change += 1
+		print("Applied %d edit %d backup %d changes" % [edits.size(), backup.size(), stat_change])
+	
 class FaceTool:
 	extends Tool
 	enum { LURK, PUSH_PULL }
 	var state = LURK
 	var face # List of cells
+	var pick_position : Vector3
+	var pick_normal : Vector3i
+	var pick_color: Color
+	# Mesh_id by map coordinate corresponding to the slected face.
+	var face_desc : Dictionary
+	var voxel_snapshot : VoxelSnapshot
 	func name() -> String:
 		return "Face tool"
 
@@ -199,13 +235,41 @@ class FaceTool:
 			LURK:
 				var pick = __try_pick_with_highlight(editor, camera, event, FACES)
 				if Event.LeftButton(event) and pick.result:
-					state = PUSH_PULL
-					var g = FaceGraph.new(editor.voxel, pick.snapping)
-					var coords : Array = Graphs.DFS(g, pick.coord)
-					editor.gizmo_plugin.highlight(editor.voxel, coords, pick.result.normal, pick.snapping)
+					pick_position = pick.result.position
+					pick_normal = pick.snapping
+					pick_color = editor.voxel.get_cell_color(pick.coord)
 					# Compute the exposed mask for each cells.
+					var g = FaceGraph.new(editor.voxel, pick.snapping, pick_color)
+					face_desc = {}
+					var coords = Graphs.DFS(g, pick.coord)
+					for coord in coords:
+						var mesh_id = editor.voxel.get_cell_id(coord)
+						mesh_id &= Math.ID_MASK[pick_normal]
+						mesh_id |= Math.shift_face(mesh_id, -pick_normal)
+						face_desc[coord] = mesh_id
+					voxel_snapshot = VoxelSnapshot.new(editor.voxel)
+					editor.gizmo_plugin.highlight(editor.voxel, coords, pick.result.normal, pick.snapping)
+					state = PUSH_PULL
 					return CONSUME_EVENT
 			PUSH_PULL:
+				var approach = Math.line_intersection(
+					pick_position,
+					pick_normal,
+					camera.project_ray_origin(event.position),
+					camera.project_ray_normal(event.position)
+				)
+				var thick : int = (approach - pick_position).dot(pick_normal)
+				voxel_snapshot.rollback()
+				if thick > 0:
+					for level in range(1, thick + 1):
+						for coord in face_desc:
+							voxel_snapshot.set_cell(coord + pick_normal * int(level), face_desc[coord], pick_color)
+				elif thick < 0:
+					for level in range(0, thick , -1):
+						for coord in face_desc:
+							voxel_snapshot.set_cell(coord + pick_normal * int(level), 0, pick_color)
+				voxel_snapshot.apply()
+				
 				if Event.LeftRelease(event):
 					return QUIT
 		return CONSUME_EVENT
@@ -378,7 +442,7 @@ class PaintTool:
 					editor.do_paint_cell_action(
 						editor.voxel,
 						last_map_position,
-						editor.voxel.get_cell(last_map_position),
+						editor.voxel.get_cell_id(last_map_position),
 						editor.palette.color
 					)
 					print("paint")
@@ -389,12 +453,12 @@ class PaintTool:
 				return PASS_EVENT
 
 			var cell_node = pick.result.collider.get_parent_node_3d()
-			var voxel_node = cell_node.get_parent_node_3d()
+			var voxel = cell_node.get_parent_node_3d()
 
-			if not voxel_node is VoxelNode:
+			if not voxel is VoxelNode:
 				return PASS_EVENT
 
-			var global_to_map_coord = voxel_node.global_transform.affine_inverse()
+			var global_to_map_coord = voxel.global_transform.affine_inverse()
 			var local_normal = (global_to_map_coord.basis * pick.result.normal).normalized()
 
 			var map_position = Vector3i(cell_node.position)
@@ -405,7 +469,7 @@ class PaintTool:
 			)
 
 			last_map_position = map_position
-			editor.gizmo_plugin.highlight(voxel_node, [map_position], pick.result.normal, snapping)
+			editor.gizmo_plugin.highlight(voxel, [map_position], pick.result.normal, snapping)
 
 			if not event is InputEventMouseButton:
 				return PASS_EVENT
@@ -417,25 +481,25 @@ class PaintTool:
 					[]:  # Inner face
 						# Triangle cylinder is turned into a cube.
 						editor.do_paint_cell_action(
-							voxel_node,
+							voxel,
 							map_position,
-							voxel_node.CUBE,
-							voxel_node.get_cell_color(map_position)
+							VoxelNode.CUBE,
+							voxel.get_cell_color(map_position)
 						)
 					[var n]:  # Face, insert cube
 						var new_box_position = map_position + n
-						var new_mesh_id = voxel_node.get_cell(map_position)
+						var new_mesh_id = voxel.get_cell_id(map_position)
 						print("current cell %x" % new_mesh_id)
 						new_mesh_id &= Math.ID_MASK[-n]
 						print("masked cell %x" % new_mesh_id)
 						new_mesh_id |= Math.shift_face(new_mesh_id, n)
 						print("new cell %x" % new_mesh_id)
 						editor.do_paint_cell_action(
-							voxel_node, new_box_position, new_mesh_id, editor.palette.color
+							voxel, new_box_position, new_mesh_id, editor.palette.color
 						)
 						return CONSUME_EVENT
 					[var t, var u]:  # Edge
-						if voxel_node.get_cell(map_position + snapping):
+						if voxel.get_cell_id(map_position + snapping):
 							# Attempt attempt to insert a triangle base cylinder.
 							#
 							# +---+  pick ray
@@ -459,14 +523,14 @@ class PaintTool:
 							assert(new_cell_rel_pos == t or new_cell_rel_pos == u)
 							var new_cell_position = map_position + new_cell_rel_pos
 							assert(
-								voxel_node.get_cell(new_cell_position) == 0,
+								voxel.get_cell_id(new_cell_position) == 0,
 								"cell should be empty. please report."
 							)
 							var new_mesh_id = (
 								Math.ID_MASK[-new_cell_rel_pos] | Math.ID_MASK[snapping - new_cell_rel_pos]
 							)
 							editor.do_paint_cell_action(
-								voxel_node, new_cell_position, new_mesh_id, editor.palette.color
+								voxel, new_cell_position, new_mesh_id, editor.palette.color
 							)
 							return CONSUME_EVENT
 
@@ -483,8 +547,8 @@ class PaintTool:
 							var v = uv[1]
 
 							if (
-								voxel_node.get_cell(edited_coord + u)
-								and voxel_node.get_cell(map_position + v)
+								voxel.get_cell_id(edited_coord + u)
+								and voxel.get_cell_id(map_position + v)
 							):
 								var new_mesh_id = (
 									Math.mesh_id_bit(snapping)
@@ -493,7 +557,7 @@ class PaintTool:
 									| Math.mesh_id_bit(snapping - inormal * 2 - v * 2)
 								)
 								editor.do_paint_cell_action(
-									voxel_node, edited_coord, new_mesh_id, editor.palette.color
+									voxel, edited_coord, new_mesh_id, editor.palette.color
 								)
 								return CONSUME_EVENT
 
@@ -501,41 +565,41 @@ class PaintTool:
 				match Math.enumerate_units(snapping):
 					[]:  # Inner face => Delete the cell.
 						editor.do_paint_cell_action(
-							voxel_node, map_position, 0, editor.palette.color
+							voxel, map_position, 0, editor.palette.color
 						)
 						editor.gizmo_plugin.clear()
 						return CONSUME_EVENT
 					[_]:  # Box face => Delete the cell.
 						editor.do_paint_cell_action(
-							voxel_node, map_position, 0, editor.palette.color
+							voxel, map_position, 0, editor.palette.color
 						)
 						editor.gizmo_plugin.clear()
 						return CONSUME_EVENT
 					[var t, var u]:  # Box edge => Attempt to turn into a triangle cylinder.
 						if (
-							voxel_node.get_cell(map_position) == voxel_node.CUBE
-							and voxel_node.get_cell(map_position + t) == 0
-							and voxel_node.get_cell(map_position + u) == 0
-							and voxel_node.get_cell(map_position + t + u) == 0
+							voxel.get_cell_id(map_position) == VoxelNode.CUBE
+							and voxel.get_cell_id(map_position + t) == 0
+							and voxel.get_cell_id(map_position + u) == 0
+							and voxel.get_cell_id(map_position + t + u) == 0
 						):
 							editor.do_paint_cell_action(
-								voxel_node,
+								voxel,
 								map_position,
 								Math.ID_MASK[-t] | Math.ID_MASK[-u],
-								voxel_node.get_cell_color(map_position)
+								voxel.get_cell_color(map_position)
 							)
 						return CONSUME_EVENT
 					[var t, var u, var v]:
-						if voxel_node.get_cell(map_position) == voxel_node.CUBE:
-							#	and voxel_node.get_cell(map_position + t) == 0
-							#	and voxel_node.get_cell(map_position + u) == 0
-							#	and voxel_node.get_cell(map_position + v) == 0
-							#	and voxel_node.get_cell(map_position + t + u + v) == 0
+						if voxel.get_cell_id(map_position) == VoxelNode.CUBE:
+							#	and voxel_node.get_cell_id(map_position + t) == 0
+							#	and voxel_node.get_cell_id(map_position + u) == 0
+							#	and voxel_node.get_cell_id(map_position + v) == 0
+							#	and voxel_node.get_cell_id(map_position + t + u + v) == 0
 							editor.do_paint_cell_action(
-								voxel_node,
+								voxel,
 								map_position,
 								Math.ID_MASK[-t] | Math.ID_MASK[-u] | Math.ID_MASK[-v],
-								voxel_node.get_cell_color(map_position)
+								voxel.get_cell_color(map_position)
 							)
 			else:
 				return PASS_EVENT

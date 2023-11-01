@@ -88,7 +88,7 @@ class Highlight:
 			# Highlight a face.
 			var voxel = gizmo.get_node_3d()
 			for coord in coords:
-				var mesh_id = voxel.get_cell(coord)
+				var mesh_id = voxel.get_cell_id(coord)
 				assert(mesh_id != 0)
 				var instanciation_data = voxel.mesh_index_map[mesh_id]
 				var transform = Transform3D()
