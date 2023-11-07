@@ -98,3 +98,7 @@ static func __gen_id_masks() -> Dictionary:
 static func shift_face(mesh_id: int, direction: Vector3i):
 	var amount = FACE_SHIFT[direction]
 	return mesh_id << amount if amount > 0 else mesh_id >> -amount
+
+
+static func z_symmetry(mesh_id: int):
+	return (mesh_id >> 4) | ((mesh_id & 0xf) << 4)

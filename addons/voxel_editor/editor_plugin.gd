@@ -73,15 +73,28 @@ func do_paint_volume_action(voxel_node, aabb: AABB, mesh_id: int, color: Color):
 	for x in range(aabb.position.x, aabb.position.x + aabb.size.x + 1):
 		for y in range(aabb.position.y, aabb.position.y + aabb.size.y + 1):
 			for z in range(aabb.position.z, aabb.position.z + aabb.size.z + 1):
-				var map_position = Vector3i(x, y, z)
-				undo_redo.add_do_method(voxel_node, "set_cell", map_position, mesh_id, color)
+				var coord = Vector3i(x, y, z)
+				undo_redo.add_do_method(voxel_node, "set_cell", coord, mesh_id, color)
 				undo_redo.add_undo_method(
 					voxel_node,
 					"set_cell",
-					map_position,
-					voxel_node.get_cell_id(map_position),
-					voxel_node.get_cell_color(map_position)
+					coord,
+					voxel_node.get_cell_id(coord),
+					voxel_node.get_cell_color(coord)
 				)
+				# Avoid doing twice the job for odd symetry when z = 0.
+				if palette.symmetry_mode() == 2 or (palette.symmetry_mode() == 1 and coord.z != 0):
+					coord.z = palette.symmetry_mode() - 1 - coord.z
+					mesh_id = Math.z_symmetry(mesh_id)
+					undo_redo.add_do_method(voxel_node, "set_cell", coord, mesh_id, color)
+					undo_redo.add_undo_method(
+						voxel_node,
+						"set_cell",
+						coord,
+						voxel_node.get_cell(coord),
+						voxel_node.get_cell_color(coord)
+					)
+
 	undo_redo.commit_action()
 
 func do_paint_snapshot_action(voxel: VoxelNode, snapshot: VoxelNode.Snapshot):
@@ -485,9 +498,9 @@ class PaintTool:
 						var new_box_position = map_position + n
 						var new_mesh_id = voxel.get_cell_id(map_position)
 						print("current cell %x" % new_mesh_id)
-						new_mesh_id &= Math.ID_MASK[-n]
+						new_mesh_id &= Math.ID_MASK[n]
 						print("masked cell %x" % new_mesh_id)
-						new_mesh_id |= Math.shift_face(new_mesh_id, n)
+						new_mesh_id |= Math.shift_face(new_mesh_id, -n)
 						print("new cell %x" % new_mesh_id)
 						editor.do_paint_cell_action(
 							voxel, new_box_position, new_mesh_id, editor.palette.color
@@ -546,10 +559,10 @@ class PaintTool:
 								and voxel.get_cell_id(map_position + v)
 							):
 								var new_mesh_id = (
-									Math.mesh_id_bit(snapping)
-									| Math.mesh_id_bit(snapping - inormal * 2)
-									| Math.mesh_id_bit(snapping - inormal * 2 - u * 2)
-									| Math.mesh_id_bit(snapping - inormal * 2 - v * 2)
+									Math.ID_MASK[snapping]
+									| Math.ID_MASK[snapping - inormal * 2]
+									| Math.ID_MASK[snapping - inormal * 2 - u * 2]
+									| Math.ID_MASK[snapping - inormal * 2 - v * 2]
 								)
 								editor.do_paint_cell_action(
 									voxel, edited_coord, new_mesh_id, editor.palette.color
