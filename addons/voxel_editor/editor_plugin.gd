@@ -441,6 +441,12 @@ class PaintTool:
 		if event is InputEventKey:
 			if event.pressed and event.keycode == KEY_E and event.echo == false:
 				editor.voxel.export_mesh()
+			if event.pressed and event.keycode == KEY_X and event.echo == false:
+				editor.do_paint_cell_action(
+					editor.voxel, last_map_position, 0, Color.WHITE
+				)
+				editor.gizmo_plugin.clear()
+				return CONSUME_EVENT
 			if event.pressed and event.keycode == KEY_P and event.echo == false:
 				if event.shift_pressed:
 					# Pick color.
@@ -553,10 +559,9 @@ class PaintTool:
 							var uv = Math.enumerate_units(snapping - inormal)
 							var u = uv[0]
 							var v = uv[1]
-
-							if (
-								voxel.get_cell_id(edited_coord + u)
-								and voxel.get_cell_id(map_position + v)
+							
+							if (voxel.get_cell_id(edited_coord + u)
+								or voxel.get_cell_id(edited_coord + v)
 							):
 								var new_mesh_id = (
 									Math.ID_MASK[snapping]

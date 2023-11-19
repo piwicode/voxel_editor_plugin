@@ -227,7 +227,6 @@ static var UV_LST: Dictionary = {
 
 
 func export_mesh():
-	print("Export mesh")
 	var faces_by_mesh_id: Dictionary = FACES_BY_MESH_ID
 	var time_start = Time.get_ticks_usec()
 	var vertices = PackedVector3Array()
@@ -262,20 +261,69 @@ func export_mesh():
 	arrays[Mesh.ARRAY_TEX_UV] = uvs
 	var time_geom_done = Time.get_ticks_usec()
 
+	if not export_path:
+		export_path = (
+			get_tree().get_edited_scene_root().scene_file_path.trim_suffix(".tscn")
+			+ "_"
+			+ get_name()
+			+ ".res"
+		)
+	print("Export mesh ", export_path)
 	# Try to get the resource from the resource cache, if found modify it in
 	# place so that the editors gets updated.
-	var arr_mesh = load("res://export_test.tres")
+	var arr_mesh = load(export_path)
 	if arr_mesh == null:  # Otherwise create a new resource.
 		arr_mesh = ArrayMesh.new()
 	arr_mesh.clear_surfaces()
 	arr_mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
+	arr_mesh.surface_set_material(0, load("res://addons/voxel_editor/material/edge_shader.tres"))
 	var time_mesh_done = Time.get_ticks_usec()
-	ResourceSaver.save(arr_mesh, "res://export_test.tres", ResourceSaver.FLAG_COMPRESS)
+	ResourceSaver.save(arr_mesh, export_path, ResourceSaver.FLAG_COMPRESS)
 	print("Done ", vertices.size(), " vertices (", skipped, " skipped)")
 	print(" - geom ", (time_geom_done - time_start) / 1000., " ms")
 	print(" - mesh ", (time_mesh_done - time_geom_done) / 1000., " ms")
 	print(" - all ", (time_mesh_done - time_start) / 1000., " ms")
 
+	var mc = mass_characteristics()
+	print(mc)
+	var mesh_instance : MeshInstance3D = MeshInstance3D.new()
+	mesh_instance.name = "MeshInstance3D"
+	mesh_instance.mesh = arr_mesh
+
+	var rigid_body : RigidBody3D = RigidBody3D.new()
+	rigid_body.name = "RigidBody3D"
+	rigid_body.center_of_mass_mode = RigidBody3D.CENTER_OF_MASS_MODE_CUSTOM
+	rigid_body.center_of_mass = mc.g
+	rigid_body.inertia = mc.j
+	rigid_body.mass = mc.mass
+	rigid_body.add_child(mesh_instance)
+	mesh_instance.owner = rigid_body
+
+	var scene = PackedScene.new()
+	scene.pack(rigid_body)
+	
+	var scene_resource_path = export_path.trim_prefix(".res") + ".tscn"
+	ResourceSaver.save(scene, scene_resource_path)
+	
+	mesh_instance.queue_free()
+	rigid_body.queue_free()
+	
+func mass_characteristics():
+	var mass : float = float(map.size())
+	# Compute center of mass.
+	var sum : Vector3i = Vector3i()
+	for c in map:
+		sum += c
+	var g : Vector3 = Vector3(sum) / mass
+	# Compute inertia matrix diagonal.
+	var j : Vector3 = Vector3()
+	for c in map:
+		var r2 : Vector3 = Vector3(c) - g
+		r2 *= r2
+		j.x += r2.y + r2.z
+		j.y += r2.x + r2.z
+		j.z += r2.x + r2.y
+	return {mass=mass, g=g, j=j}
 
 func _enter_tree():
 	if map.size() == 0:

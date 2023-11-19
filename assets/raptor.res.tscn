@@ -1,0 +1,12 @@
+[gd_scene load_steps=2 format=3 uid="uid://chxh36lbxtvqy"]
+
+[ext_resource type="ArrayMesh" uid="uid://cikt74drbfvd" path="res://assets/raptor.res" id="1_f6auw"]
+
+[node name="RigidBody3D" type="RigidBody3D"]
+mass = 179.0
+inertia = Vector3(950.1, 3414.47, 2752.57)
+center_of_mass_mode = 1
+center_of_mass = Vector3(0.284916, -0.692737, 0)
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="."]
+mesh = ExtResource("1_f6auw")

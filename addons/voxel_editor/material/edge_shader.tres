@@ -1,0 +1,7 @@
+[gd_resource type="ShaderMaterial" load_steps=2 format=3 uid="uid://dayi4w8pebrxe"]
+
+[ext_resource type="Shader" path="res://addons/voxel_editor/material/edge_shader.gdshader" id="1_2cx0k"]
+
+[resource]
+render_priority = 0
+shader = ExtResource("1_2cx0k")

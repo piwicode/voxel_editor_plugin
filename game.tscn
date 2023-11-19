@@ -1,0 +1,29 @@
+[gd_scene load_steps=5 format=3 uid="uid://b0to4f3a753bf"]
+
+[ext_resource type="Script" path="res://game.gd" id="1_frbr8"]
+[ext_resource type="PackedScene" uid="uid://bdjqy5h4jxymh" path="res://assets/raptor_asm.tscn" id="1_u6eq4"]
+[ext_resource type="PackedScene" uid="uid://c5kegc4i0fsn5" path="res://assets/turret_asm.tscn" id="2_6o5dx"]
+
+[sub_resource type="BoxMesh" id="BoxMesh_01dla"]
+size = Vector3(0.2, 0.2, 0.2)
+
+[node name="game" type="Node3D"]
+script = ExtResource("1_frbr8")
+
+[node name="DirectionalLight3D" type="DirectionalLight3D" parent="."]
+transform = Transform3D(0.411514, 0.633114, -0.655609, 0, 0.71934, 0.694658, 0.911403, -0.285862, 0.296019, 0, 0, 0)
+shadow_enabled = true
+
+[node name="turret_asm" parent="." instance=ExtResource("2_6o5dx")]
+unique_name_in_owner = true
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 30, 0, -0.452652)
+
+[node name="Camera3D" type="Camera3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, -4.37114e-08, 1, 0, -1, -4.37114e-08, 30, 40, 0)
+
+[node name="raptor_asm" parent="." instance=ExtResource("1_u6eq4")]
+
+[node name="target" type="MeshInstance3D" parent="."]
+unique_name_in_owner = true
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 15, 10, -10)
+mesh = SubResource("BoxMesh_01dla")

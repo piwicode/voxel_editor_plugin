@@ -1,0 +1,59 @@
+[gd_scene load_steps=5 format=3 uid="uid://c5kegc4i0fsn5"]
+
+[ext_resource type="Script" path="res://assets/turret.gd" id="1_nhtr8"]
+[ext_resource type="ArrayMesh" uid="uid://0ea5pmwdobg6" path="res://assets/turret_body.res" id="1_tx0lj"]
+[ext_resource type="ArrayMesh" uid="uid://bqqbe6f11dpr4" path="res://assets/turret_cannon.res" id="2_027f7"]
+
+[sub_resource type="BoxMesh" id="BoxMesh_scqsd"]
+size = Vector3(30, 0.2, 0.2)
+
+[node name="turret_asm" type="Node3D"]
+script = ExtResource("1_nhtr8")
+
+[node name="cannon_joint" type="HingeJoint3D" parent="."]
+unique_name_in_owner = true
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.5, 4.5, 0.5)
+node_a = NodePath("../body")
+node_b = NodePath("../cannon")
+angular_limit/upper = 0.174533
+angular_limit/lower = -1.48353
+
+[node name="body" type="RigidBody3D" parent="."]
+unique_name_in_owner = true
+inertia = Vector3(64, 64, 64)
+can_sleep = false
+angular_damp = 2.432
+
+[node name="body" type="MeshInstance3D" parent="body"]
+mesh = ExtResource("1_tx0lj")
+skeleton = NodePath("../..")
+
+[node name="Camera3D" type="Camera3D" parent="body"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.5, 4.5, 30)
+
+[node name="aim_center" type="Node3D" parent="body"]
+unique_name_in_owner = true
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.5, 4.5, 0.5)
+
+[node name="cannon" type="RigidBody3D" parent="."]
+unique_name_in_owner = true
+inertia = Vector3(64, 64, 64)
+can_sleep = false
+angular_damp = 2.841
+
+[node name="cannon" type="MeshInstance3D" parent="cannon"]
+mesh = ExtResource("2_027f7")
+skeleton = NodePath("../../body/body")
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="cannon"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 20, 4.5, 0.5)
+mesh = SubResource("BoxMesh_scqsd")
+
+[node name="StaticBody3D" type="StaticBody3D" parent="."]
+
+[node name="body_joint" type="HingeJoint3D" parent="."]
+unique_name_in_owner = true
+transform = Transform3D(1, 0, 0, 0, -4.37114e-08, -1, 0, 1, -4.37114e-08, -0.5, 0, 0.5)
+node_a = NodePath("../StaticBody3D")
+node_b = NodePath("../body")
+motor/target_velocity = 0.0

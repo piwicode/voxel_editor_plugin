@@ -1,0 +1,21 @@
+[gd_scene load_steps=3 format=3 uid="uid://bdjqy5h4jxymh"]
+
+[ext_resource type="ArrayMesh" uid="uid://cikt74drbfvd" path="res://assets/raptor.res" id="1_gy3l8"]
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_b8rja"]
+size = Vector3(15, 4, 9)
+
+[node name="raptor_asm" type="Node3D"]
+
+[node name="RigidBody3D" type="RigidBody3D" parent="."]
+gravity_scale = 0.0
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="RigidBody3D"]
+mesh = ExtResource("1_gy3l8")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="RigidBody3D"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2, -0.5, 0)
+shape = SubResource("BoxShape3D_b8rja")
+
+[node name="Camera3D" type="Camera3D" parent="."]
+transform = Transform3D(-4.37114e-08, 0, -1, 0, 1, 0, 1, 0, -4.37114e-08, -7, 5, 0)
